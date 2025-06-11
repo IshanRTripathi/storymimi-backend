@@ -1,0 +1,1 @@
+# Mock data and services for AI APIs

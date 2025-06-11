@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Stories - StoryMimi</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="icon" href="/static/favicon/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">StoryMimi</div>
+            <nav>
+                <ul>
+                    <li><a href="/static/index.html">Home</a></li>
+                    <li><a href="/static/create-user.html">Create User</a></li>
+                    <li><a href="/static/create-story.html">Create Story</a></li>
+                    <li><a href="/docs">API Docs</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section style="max-width: 800px; margin: 2rem auto;">
+            <div class="card">
+                <div class="card-header">
+                    <span id="username">User</span>'s Stories
+                </div>
+                <div class="card-body">
+                    <div id="user-info" style="margin-bottom: 2rem;">
+                        <p>User ID: <span id="user-id"></span></p>
+                        <p>Email: <span id="user-email"></span></p>
+                    </div>
+                    
+                    <h3>Stories</h3>
+                    <div id="stories-list">
+                        <!-- Stories will be loaded here -->
+                        <div class="loading" style="text-align: center;">
+                            <p>Loading stories...</p>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 2rem;">
+                        <a href="/static/create-story.html" class="btn btn-primary">Create New Story</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2023 StoryMimi. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <div id="alert-container"></div>
+    <script src="/static/js/main.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get user ID from URL parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const userId = urlParams.get('id');
+            
+            if (!userId) {
+                showAlert('No user ID provided', 'danger');
+                return;
+            }
+            
+            // Display user ID
+            document.getElementById('user-id').textContent = userId;
+            
+            // Store user ID in local storage for future use
+            localStorage.setItem('currentUserId', userId);
+            
+            // Load user details
+            loadUserDetails(userId);
+            
+            // Load user stories
+            loadUserStories(userId);
+        });
+        
+        async function loadUserDetails(userId) {
+            try {
+                const response = await fetch(`/users/${userId}`);
+                if (!response.ok) {
+                    throw new Error('Failed to load user details');
+                }
+                
+                const user = await response.json();
+                
+                // Update user info
+                document.getElementById('username').textContent = user.username;
+                document.getElementById('user-email').textContent = user.email;
+                
+            } catch (error) {
+                console.error('Error loading user details:', error);
+                showAlert('Error loading user details: ' + error.message, 'danger');
+            }
+        }
+        
+        async function loadUserStories(userId) {
+            try {
+                const response = await fetch(`/users/${userId}/stories`);
+                if (!response.ok) {
+                    throw new Error('Failed to load user stories');
+                }
+                
+                const stories = await response.json();
+                
+                // Clear loading indicator
+                const storiesList = document.getElementById('stories-list');
+                storiesList.innerHTML = '';
+                
+                if (stories.length === 0) {
+                    storiesList.innerHTML = `
+                        <div style="text-align: center; padding: 2rem;">
+                            <p>No stories found for this user.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Create a table for stories
+                const table = document.createElement('table');
+                table.style.width = '100%';
+                table.style.borderCollapse = 'collapse';
+                
+                // Add table header
+                const thead = document.createElement('thead');
+                thead.innerHTML = `
+                    <tr>
+                        <th style="text-align: left; padding: 8px; border-bottom: 1px solid var(--border-color);">Title</th>
+                        <th style="text-align: left; padding: 8px; border-bottom: 1px solid var(--border-color);">Status</th>
+                        <th style="text-align: left; padding: 8px; border-bottom: 1px solid var(--border-color);">Created</th>
+                        <th style="text-align: left; padding: 8px; border-bottom: 1px solid var(--border-color);">Actions</th>
+                    </tr>
+                `;
+                table.appendChild(thead);
+                
+                // Add table body
+                const tbody = document.createElement('tbody');
+                stories.forEach(story => {
+                    const tr = document.createElement('tr');
+                    
+                    // Format date
+                    const createdDate = new Date(story.created_at).toLocaleDateString();
+                    
+                    tr.innerHTML = `
+                        <td style="padding: 8px; border-bottom: 1px solid var(--border-color);">${story.title}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid var(--border-color);">
+                            <span class="badge badge-${story.status.toLowerCase()}">${story.status}</span>
+                        </td>
+                        <td style="padding: 8px; border-bottom: 1px solid var(--border-color);">${createdDate}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid var(--border-color);">
+                            ${story.status === 'COMPLETE' ? 
+                                `<a href="/static/story.html?id=${story.story_id}" class="btn btn-primary" style="padding: 4px 8px; font-size: 0.8rem;">View</a>` : 
+                                `<a href="/static/story-status.html?id=${story.story_id}" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;">Check Status</a>`
+                            }
+                        </td>
+                    `;
+                    
+                    tbody.appendChild(tr);
+                });
+                table.appendChild(tbody);
+                
+                storiesList.appendChild(table);
+                
+            } catch (error) {
+                console.error('Error loading user stories:', error);
+                showAlert('Error loading user stories: ' + error.message, 'danger');
+                document.getElementById('stories-list').innerHTML = `
+                    <div style="text-align: center;">
+                        <p>Failed to load stories. Please try again later.</p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

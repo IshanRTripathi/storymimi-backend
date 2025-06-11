@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Story - StoryMimi</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="icon" href="/static/favicon/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">StoryMimi</div>
+            <nav>
+                <ul>
+                    <li><a href="/static/index.html">Home</a></li>
+                    <li><a href="/static/create-user.html">Create User</a></li>
+                    <li><a href="/static/create-story.html">Create Story</a></li>
+                    <li><a href="/docs">API Docs</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="story-container" style="margin: 2rem auto;">
+            <div id="story-header" style="text-align: center; margin-bottom: 3rem;">
+                <h1 id="story-title">Loading Story...</h1>
+                <p>Created: <span id="story-date"></span></p>
+                <p>Story ID: <span id="story-id"></span></p>
+            </div>
+            
+            <div id="story-content">
+                <!-- Story scenes will be loaded here -->
+                <div class="loading" style="text-align: center;">
+                    <p>Loading story content...</p>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 3rem;">
+                <a href="/static/create-story.html" class="btn btn-primary">Create Another Story</a>
+                <a id="user-stories-link" href="#" class="btn btn-secondary">View All My Stories</a>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2023 StoryMimi. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <div id="alert-container"></div>
+    <script src="/static/js/main.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get story ID from URL parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const storyId = urlParams.get('id');
+            
+            if (!storyId) {
+                showAlert('No story ID provided', 'danger');
+                return;
+            }
+            
+            // Display story ID
+            document.getElementById('story-id').textContent = storyId;
+            
+            // Load story details
+            loadStory(storyId);
+        });
+        
+        async function loadStory(storyId) {
+            try {
+                const response = await fetch(`/stories/${storyId}`);
+                if (!response.ok) {
+                    throw new Error('Failed to load story');
+                }
+                
+                const story = await response.json();
+                
+                // Update story header
+                document.getElementById('story-title').textContent = story.title;
+                document.getElementById('story-date').textContent = new Date(story.created_at).toLocaleDateString();
+                
+                // Update user stories link
+                const userStoriesLink = document.getElementById('user-stories-link');
+                userStoriesLink.href = `/static/user-stories.html?id=${story.user_id}`;
+                
+                // Clear loading indicator
+                document.getElementById('story-content').innerHTML = '';
+                
+                // Add each scene
+                story.scenes.forEach(scene => {
+                    const sceneElement = document.createElement('div');
+                    sceneElement.className = 'scene';
+                    sceneElement.innerHTML = `
+                        <img src="${scene.image_url}" alt="Scene ${scene.sequence + 1}" class="scene-image">
+                        <p class="scene-text">${scene.text}</p>
+                        <audio controls class="audio-player">
+                            <source src="${scene.audio_url}" type="audio/mpeg">
+                            Your browser does not support the audio element.
+                        </audio>
+                    `;
+                    document.getElementById('story-content').appendChild(sceneElement);
+                });
+                
+            } catch (error) {
+                console.error('Error loading story:', error);
+                showAlert('Error loading story: ' + error.message, 'danger');
+                document.getElementById('story-content').innerHTML = `
+                    <div style="text-align: center;">
+                        <p>Failed to load story content. Please try again later.</p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StoryMimi - AI-Powered Story Generation</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="icon" href="/static/favicon/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">StoryMimi</div>
+            <nav>
+                <ul>
+                    <li><a href="/static/index.html">Home</a></li>
+                    <li><a href="/static/create-user.html">Create User</a></li>
+                    <li><a href="/static/create-story.html">Create Story</a></li>
+                    <li><a href="/docs">API Docs</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="hero" style="text-align: center; padding: 3rem 0;">
+            <h1>Welcome to StoryMimi</h1>
+            <p>Generate beautiful stories with text, images, and audio using AI</p>
+            <div style="margin-top: 2rem;">
+                <a href="/static/create-user.html" class="btn btn-primary">Get Started</a>
+                <a href="/docs" class="btn btn-secondary">View API Docs</a>
+            </div>
+        </section>
+
+        <section class="features" style="margin-top: 3rem;">
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between;">
+                <div class="card" style="flex: 1; min-width: 300px; margin: 1rem;">
+                    <div class="card-header">Text Generation</div>
+                    <div class="card-body">
+                        <p>Create engaging story narratives using advanced AI language models.</p>
+                    </div>
+                </div>
+                <div class="card" style="flex: 1; min-width: 300px; margin: 1rem;">
+                    <div class="card-header">Image Generation</div>
+                    <div class="card-body">
+                        <p>Bring your stories to life with AI-generated images for each scene.</p>
+                    </div>
+                </div>
+                <div class="card" style="flex: 1; min-width: 300px; margin: 1rem;">
+                    <div class="card-header">Audio Narration</div>
+                    <div class="card-body">
+                        <p>Listen to your stories with realistic AI-generated voice narration.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="how-it-works" style="margin-top: 3rem;">
+            <h2>How It Works</h2>
+            <ol style="list-style-position: inside; padding-left: 0;">
+                <li>Create a user account</li>
+                <li>Enter a story prompt and select your preferences</li>
+                <li>Our AI generates text, images, and audio for your story</li>
+                <li>View and share your completed story</li>
+            </ol>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2023 StoryMimi. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <div id="alert-container"></div>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

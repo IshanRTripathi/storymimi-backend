@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Story Status - StoryMimi</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="icon" href="/static/favicon/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">StoryMimi</div>
+            <nav>
+                <ul>
+                    <li><a href="/static/index.html">Home</a></li>
+                    <li><a href="/static/create-user.html">Create User</a></li>
+                    <li><a href="/static/create-story.html">Create Story</a></li>
+                    <li><a href="/docs">API Docs</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section style="max-width: 800px; margin: 2rem auto;">
+            <div class="card">
+                <div class="card-header">Story Generation Status</div>
+                <div class="card-body">
+                    <div style="text-align: center;">
+                        <h2 id="story-title">Processing Your Story</h2>
+                        <p>Story ID: <span id="story-id"></span></p>
+                        <p>Current Status: <span id="story-status" class="badge badge-processing">PROCESSING</span></p>
+                        
+                        <div id="status-description" style="margin: 2rem 0;">
+                            <p>Your story is being generated. This process may take a few minutes.</p>
+                            <p>The AI is creating text, generating images, and producing audio narration for your story.</p>
+                        </div>
+                        
+                        <div class="progress" style="height: 20px; margin: 2rem 0; background-color: #e9ecef; border-radius: 0.25rem; overflow: hidden;">
+                            <div id="progress-bar" class="progress-bar" role="progressbar" style="width: 25%; height: 100%; background-color: var(--primary-color); transition: width 0.6s ease;"></div>
+                        </div>
+                        
+                        <a id="view-story-btn" href="#" class="btn btn-primary" style="display: none;">View Completed Story</a>
+                        <a href="/static/create-story.html" class="btn btn-secondary">Create Another Story</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2023 StoryMimi. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <div id="alert-container"></div>
+    <script src="/static/js/main.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get story ID from URL parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const storyId = urlParams.get('id');
+            
+            if (!storyId) {
+                showAlert('No story ID provided', 'danger');
+                return;
+            }
+            
+            // Display story ID
+            document.getElementById('story-id').textContent = storyId;
+            
+            // Start polling for status
+            pollStoryStatus(storyId);
+            
+            // Simulate progress bar animation
+            simulateProgress();
+        });
+        
+        function simulateProgress() {
+            const progressBar = document.getElementById('progress-bar');
+            let width = 25;
+            
+            const interval = setInterval(() => {
+                if (width >= 90) {
+                    clearInterval(interval);
+                } else {
+                    width += Math.random() * 5;
+                    if (width > 90) width = 90;
+                    progressBar.style.width = width + '%';
+                }
+            }, 3000);
+            
+            // Store interval ID to clear it when navigating away
+            window.progressInterval = interval;
+        }
+        
+        // Update status description based on status
+        function updateStatusDescription(status) {
+            const descriptionElement = document.getElementById('status-description');
+            const progressBar = document.getElementById('progress-bar');
+            
+            switch(status) {
+                case 'PENDING':
+                    descriptionElement.innerHTML = `
+                        <p>Your story is in the queue and will begin processing soon.</p>
+                        <p>Please wait while we prepare to generate your story.</p>
+                    `;
+                    progressBar.style.width = '10%';
+                    break;
+                case 'PROCESSING':
+                    descriptionElement.innerHTML = `
+                        <p>Your story is being generated. This process may take a few minutes.</p>
+                        <p>The AI is creating text, generating images, and producing audio narration for your story.</p>
+                    `;
+                    // Progress bar is animated separately
+                    break;
+                case 'COMPLETE':
+                    descriptionElement.innerHTML = `
+                        <p>Your story has been successfully generated!</p>
+                        <p>Click the button below to view your completed story with text, images, and audio.</p>
+                    `;
+                    progressBar.style.width = '100%';
+                    break;
+                case 'FAILED':
+                    descriptionElement.innerHTML = `
+                        <p>We encountered an error while generating your story.</p>
+                        <p>Please try again or contact support if the problem persists.</p>
+                    `;
+                    progressBar.style.width = '100%';
+                    progressBar.style.backgroundColor = 'var(--danger-color)';
+                    break;
+            }
+        }
+        
+        // Override the pollStoryStatus function to update UI
+        function pollStoryStatus(storyId) {
+            const statusElement = document.getElementById('story-status');
+            if (!statusElement) return;
+            
+            const interval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/stories/${storyId}/status`);
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch story status');
+                    }
+                    
+                    const data = await response.json();
+                    statusElement.textContent = data.status;
+                    statusElement.className = `badge badge-${data.status.toLowerCase()}`;
+                    
+                    // Update description based on status
+                    updateStatusDescription(data.status);
+                    
+                    // If story is complete or failed, stop polling
+                    if (data.status === 'COMPLETE' || data.status === 'FAILED') {
+                        clearInterval(interval);
+                        clearInterval(window.progressInterval); // Stop progress animation
+                        
+                        if (data.status === 'COMPLETE') {
+                            // Show view story button
+                            const viewBtn = document.getElementById('view-story-btn');
+                            if (viewBtn) {
+                                viewBtn.style.display = 'inline-block';
+                                viewBtn.href = `/static/story.html?id=${storyId}`;
+                            }
+                        }
+                    }
+                    
+                } catch (error) {
+                    console.error('Error checking story status:', error);
+                    showAlert('Error checking story status: ' + error.message, 'danger');
+                    clearInterval(interval);
+                }
+            }, 5000); // Check every 5 seconds
+            
+            // Store interval ID to clear it when navigating away
+            window.storyStatusInterval = interval;
+        }
+        
+        // Clean up intervals when navigating away
+        window.addEventListener('beforeunload', function() {
+            if (window.storyStatusInterval) {
+                clearInterval(window.storyStatusInterval);
+            }
+            if (window.progressInterval) {
+                clearInterval(window.progressInterval);
+            }
+        });
+    </script>
+</body>
+</html>
