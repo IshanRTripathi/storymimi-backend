@@ -34,3 +34,8 @@ class Settings(BaseSettings):
 
 # Create a global settings object
 settings = Settings()
+
+def refresh_settings():
+    """Refresh settings by reloading from environment variables."""
+    global settings
+    settings = Settings()

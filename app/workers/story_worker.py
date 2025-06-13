@@ -53,6 +53,7 @@ async def _generate_story(story_id: str, request: StoryRequest) -> Dict[str, Any
     Returns:
         A dictionary with the task result
     """
+    # Initialize Supabase client with default configuration
     db_client = SupabaseClient()
     
     try:
@@ -60,7 +61,6 @@ async def _generate_story(story_id: str, request: StoryRequest) -> Dict[str, Any
         
         # Update story status to PROCESSING
         await db_client.update_story_status(story_id, StoryStatus.PROCESSING)
-        logger.debug(f"Updated story status to PROCESSING for story_id={story_id}")
         
         # Generate the full story text
         async with await AIServiceFactory.create_service() as ai_service:
@@ -89,21 +89,24 @@ async def _generate_story(story_id: str, request: StoryRequest) -> Dict[str, Any
             try:
                 story_data = json.loads(story_text)
                 logger.debug(f"Successfully parsed story text as JSON for story_id={story_id}")
-            except json.JSONDecodeError:
-                logger.warning(f"Initial JSON parsing failed for story_id={story_id}, attempting to extract JSON from text")
-                # If the response is not valid JSON, try to extract JSON from the text
+            except json.JSONDecodeError as e:
+                logger.warning(f"Initial JSON parsing failed for story_id={story_id}, attempting to extract JSON from text: {str(e)}")
+                # Try to extract JSON from the text
                 import re
-                json_match = re.search(r'\{\s*"title".*\}\s*\}', story_text, re.DOTALL)
+                # Look for JSON object with title and scenes array
+                json_match = re.search(r'\{\s*"title".*"scenes".*\}\s*\}', story_text, re.DOTALL)
                 if json_match:
                     try:
                         story_data = json.loads(json_match.group(0))
                         logger.debug(f"Successfully extracted and parsed JSON from text for story_id={story_id}")
-                    except json.JSONDecodeError:
-                        logger.error(f"Failed to parse extracted JSON for story_id={story_id}")
-                        raise Exception("Failed to parse story text as JSON")
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Failed to parse extracted JSON for story_id={story_id}: {str(e)}")
+                        logger.debug(f"Extracted JSON string: {json_match.group(0)}")
+                        raise Exception(f"Failed to parse story text as JSON: {str(e)}")
                 else:
                     logger.error(f"Could not find JSON pattern in text for story_id={story_id}")
-                    raise Exception("Failed to parse story text as JSON")
+                    logger.debug(f"Full response text: {story_text}")
+                    raise Exception("Could not find valid JSON pattern in response")
             
             # Process each scene
             scenes = story_data.get("scenes", [])

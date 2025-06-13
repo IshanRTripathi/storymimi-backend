@@ -1,0 +1,139 @@
+**Goal:** Develop a FastAPI backend application for the StoryMimi project. This backend will handle user requests for story generation, orchestrate calls to various AI services (text, image, audio), manage story data in Supabase, and process long-running tasks asynchronously using Celery and Redis.
+
+**Core Technologies:**
+- **Web Framework:** FastAPI
+- **Database & Storage:** Supabase (PostgreSQL and Storage)
+- **Asynchronous Task Queue:** Celery with Redis as broker and backend
+- **Text Generation LLM:** Qwen-2.5-7B-Instruct (via OpenRouter.ai API)
+- **Image Generation:** FLUX.1-schnell (via Together.ai API)
+- **Audio Generation:** ElevenLabs API
+- **HTTP Client:** `httpx` for asynchronous API calls
+- **Data Validation:** Pydantic
+
+**Project Structure (Strictly Adhere to This ):**
+storymimi-backend/
+├── app/
+│   ├── init.py
+│   ├── main.py              # Main FastAPI application entry point
+│   ├── config.py            # Pydantic BaseSettings for configuration
+│   ├── api/                 # FastAPI routers for API endpoints
+│   │   ├── init.py
+│   │   ├── stories.py       # Endpoints for story generation, status, retrieval
+│   │   └── users.py         # Basic user-related endpoints (e.g., get user stories)
+│   ├── services/            # Business logic and AI/DB interactions
+│   │   ├── init.py
+│   │   ├── ai_service.py    # Handles all AI API calls (OpenRouter, Together, ElevenLabs)
+│   │   └── story_service.py # Orchestrates story creation, calls AI/DB services
+│   ├── workers/             # Celery worker definitions
+│   │   ├── init.py
+│   │   ├── celery_app.py    # Celery application instance and configuration
+│   │   └── story_worker.py  # Celery tasks for background story generation
+│   ├── database/            # Database client and utilities
+│   │   ├── init.py
+│   │   └── supabase_client.py # Supabase client for DB and Storage operations
+│   └── models/              # Pydantic models for data structures (requests, responses, DB models)
+│       ├── init.py
+│       ├── story.py         # Models for Story, Scene, StoryRequest, StoryResponse, etc.
+│       └── user.py          # Models for User
+├── requirements.txt         # Python dependencies
+├── .env.example             # Example environment variables file
+├── docker-compose.yml       # Docker Compose for local Redis setup
+└── README.md                # Project README
+
+**Detailed Implementation Requirements:**
+
+1.  **`storymimi-backend/` (Root Directory):**
+    *   Create the directory structure as specified above.
+    *   `requirements.txt`: Include `fastapi`, `uvicorn`, `celery`, `redis`, `supabase-py`, `httpx`, `pydantic`, `python-multipart`, `python-dotenv`.
+    *   `.env.example`: Provide placeholders for all API keys and URLs (Supabase, Redis, OpenRouter, Together.ai, ElevenLabs ). Clearly label each.
+        ```ini
+        # Supabase Configuration
+        SUPABASE_URL=YOUR_SUPABASE_URL
+        SUPABASE_KEY=YOUR_SUPABASE_ANON_KEY
+
+        # Redis Configuration
+        REDIS_URL=redis://localhost:6379/0
+
+        # AI Service Configuration
+        OPENROUTER_API_KEY=YOUR_OPENROUTER_API_KEY
+        TOGETHER_API_KEY=YOUR_TOGETHER_API_KEY
+        ELEVENLABS_API_KEY=YOUR_ELEVENLABS_API_KEY
+
+        # AI Service URLs and Models
+        OPENROUTER_BASE_URL=
+        QWEN_MODEL_NAME=qwen/qwen-2.5-7b-instruct:free
+        TOGETHER_BASE_URL=
+        FLUX_MODEL_NAME=black-forest-labs/FLUX.1-schnell
+
+        # Application Settings
+        DEBUG=True
+        HOST=0.0.0.0
+        PORT=8080
+        ```
+    *   `docker-compose.yml`: A minimal setup to run a Redis container for local development.
+
+2.  **`app/config.py`:**
+    *   Define a `Settings` class using `pydantic.BaseSettings` to load environment variables.
+    *   Include fields for all variables in `.env.example`.
+    *   Use `env_file = ".env"` in `Config`.
+
+3.  **`app/main.py`:**
+    *   Initialize FastAPI app.
+    *   Add `CORSMiddleware` to allow all origins, methods, and headers for development.
+    *   Include routers from `app.api.stories` and `app.api.users`.
+    *   Implement a root endpoint (`/` ) and a health check endpoint (`/health`).
+
+4.  **`app/models/story.py`:**
+    *   Define Pydantic models for `StoryRequest` (user input for story generation), `StoryResponse` (initial response with story ID and status), `StoryDetail` (full story with scenes), `Scene` (individual scene details: text, image URL, audio URL), and `StoryStatus` (Enum: `PROCESSING`, `COMPLETE`, `FAILED`).
+
+5.  **`app/database/supabase_client.py`:**
+    *   Implement a `SupabaseClient` class.
+    *   Methods for: `create_user`, `get_user`, `create_story`, `get_story`, `update_story_status`, `create_scene`, `get_story_scenes`.
+    *   Methods for Supabase Storage: `upload_image` (returns public URL), `upload_audio` (returns public URL).
+    *   Ensure all methods are `async` and handle Supabase client initialization.
+
+6.  **`app/services/ai_service.py`:**
+    *   Implement an `AIService` class with `__aenter__` and `__aexit__` for `httpx.AsyncClient` lifecycle management.
+    *   `generate_text(prompt: str ) -> str`: Calls OpenRouter.ai with `QWEN_MODEL_NAME`.
+    *   `generate_image(prompt: str, width: int = 768, height: int = 432, steps: int = 12, seed: Optional[int] = None) -> bytes`: Calls Together.ai with `FLUX_MODEL_NAME`. Returns raw image bytes (decoded from base64).
+    *   `generate_audio(text: str, voice_id: str = "21m00Tcm4TlvDq8ikWAM") -> bytes`: Calls ElevenLabs API. Returns raw audio bytes.
+    *   Ensure robust error handling for all API calls.
+
+7.  **`app/workers/celery_app.py`:**
+    *   Create and configure the Celery application instance.
+    *   Load configuration from the `Settings` object in `app.config`.
+    *   Set `broker_url` and `result_backend` to the `REDIS_URL`.
+    *   Enable `task_track_started` and set `task_serializer` to `json`.
+
+
+8.  **`app/workers/story_worker.py`:**
+    *   Define a Celery task named `generate_story_task`.
+    *   This task will accept a `story_id` and the `StoryRequest` data.
+    *   **Task Logic:**
+        1.  Instantiate `StoryService`.
+        2.  Update story status to `PROCESSING` in Supabase.
+        3.  Generate the full story text (all scenes) using `AIService`.
+        4.  Loop through each scene:
+            a. Generate the image for the scene using `AIService`.
+            b. Generate the audio for the scene using `AIService`.
+            c. Upload the image and audio to Supabase Storage using `SupabaseClient`.
+            d. Create a new scene record in the Supabase database with the text and the public URLs for the image and audio.
+        5.  Once all scenes are processed, update the main story status to `COMPLETE`.
+        6.  Implement comprehensive `try...except` blocks to catch any failures. If an error occurs, update the story status to `FAILED` and log the error.
+
+9.  **`app/services/story_service.py`:**
+    *   Implement a `StoryService` class.
+    *   `create_new_story(request: StoryRequest) -> dict`: This is the main entry point for creating a story.
+        1.  Create a new story record in Supabase with an initial `PENDING` status.
+        2.  Get the `story_id` for the newly created record.
+        3.  Dispatch the `generate_story_task` to Celery with the `story_id` and request data.
+        4.  Return a dictionary containing the `story_id` and the `PENDING` status.
+
+10. **`app/api/stories.py`:**
+    *   Create a FastAPI `APIRouter`.
+    *   `POST /stories/`: Accepts a `StoryRequest`, calls `story_service.create_new_story`, and returns a `StoryResponse` with the `story_id` and initial status.
+    *   `GET /stories/{story_id}`: Retrieves the full story details (including all scenes) from Supabase.
+    *   `GET /stories/{story_id}/status`: Retrieves only the current status of the story from Supabase.
+
+**Final Instruction:**
+Please generate the complete project based on these detailed requirements, filling in the logic for each file as described. Ensure all `async` and `await` keywords are used correctly for non-blocking I/O operations. Add comments where the logic is complex, especially in the Celery task and service layers.

@@ -112,3 +112,47 @@ async def get_user_stories(user_id: UUID, service: StoryService = Depends(get_st
     except Exception as e:
         logger.error(f"Error retrieving stories for user ID {user_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.patch("/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: UUID, 
+    user_data: Dict[str, Any], 
+    service: StoryService = Depends(get_story_service)
+):
+    """Update a user's information
+    
+    Args:
+        user_id: The ID of the user to update
+        user_data: Dictionary of fields to update
+        service: The StoryService instance (injected by FastAPI)
+        
+    Returns:
+        The updated UserResponse
+        
+    Raises:
+        HTTPException: If user update fails
+    """
+    logger.info(f"Updating user with ID: {user_id}, fields: {list(user_data.keys())}")
+    try:
+        # Validate that we're not trying to update the user_id
+        if "user_id" in user_data:
+            logger.warning(f"Attempted to update user_id for user {user_id}")
+            raise HTTPException(status_code=400, detail="Cannot update user_id field")
+            
+        updated_user = await service.update_user(user_id, user_data)
+        if not updated_user:
+            logger.warning(f"User with ID {user_id} not found for update")
+            raise HTTPException(status_code=404, detail=f"User with ID {user_id} not found")
+            
+        logger.info(f"User updated successfully: {user_id}")
+        return UserResponse(
+            user_id=updated_user["user_id"],
+            email=updated_user["email"],
+            username=updated_user["username"],
+            created_at=updated_user["created_at"]
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating user with ID {user_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

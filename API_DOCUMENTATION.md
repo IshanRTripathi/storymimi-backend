@@ -4,7 +4,7 @@ This document provides detailed information about the StoryMimi backend API endp
 
 ## Base URL
 
-All API endpoints are relative to the base URL: `http://localhost:8000`
+All API endpoints are relative to the base URL: `http://localhost:8080`
 
 ## Authentication
 
@@ -286,7 +286,7 @@ The mock delay can be configured with `MOCK_DELAY_SECONDS` (default: 5.0 seconds
 
 ## Testing the API
 
-You can test the API using the Swagger UI at `http://localhost:8000/docs` or ReDoc at `http://localhost:8000/redoc`.
+You can test the API using the Swagger UI at `http://localhost:8080/docs` or ReDoc at `http://localhost:8080/redoc`.
 
 ### Example Workflow
 

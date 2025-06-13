@@ -84,8 +84,8 @@ The mock services return sample data from the `app/mocks/data` directory:
 
 Once the application is running, you can access the API documentation at:
 
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+- Swagger UI: http://localhost:8080/docs
+- ReDoc: http://localhost:8080/redoc
 
 ## Project Structure
 

@@ -5,7 +5,7 @@ This guide provides detailed instructions for testing the StoryMimi backend API 
 ## Prerequisites
 
 1. The StoryMimi backend server is running (using one of the startup methods in the README)
-2. The server is accessible at `http://localhost:8000`
+2. The server is accessible at `http://localhost:8080`
 3. Mock services are enabled for testing without real API calls (set `USE_MOCK_AI_SERVICES=True` in `.env`)
 
 ## Testing Methods
@@ -22,7 +22,7 @@ You can test the StoryMimi API using any of the following methods:
 Swagger UI provides an interactive interface to test all API endpoints directly in your browser.
 
 1. Start the StoryMimi backend server
-2. Open your browser and navigate to `http://localhost:8000/docs`
+2. Open your browser and navigate to `http://localhost:8080/docs`
 3. You'll see all available endpoints organized by tags (stories, users)
 
 ### Step-by-Step End-to-End Test
@@ -91,7 +91,7 @@ Postman provides a more flexible interface for API testing with the ability to s
 2. Set up environment variables:
    - Create a new environment (e.g., "StoryMimi Local")
    - Add the following variables:
-     - `base_url`: `http://localhost:8000`
+     - `base_url`: `http://localhost:8080`
      - `user_id`: (leave empty for now)
      - `story_id`: (leave empty for now)
 
@@ -109,7 +109,7 @@ For command-line testing, you can use curl commands.
 1. **Create a User**:
    ```bash
    curl -X 'POST' \
-     'http://localhost:8000/users/' \
+     'http://localhost:8080/users/' \
      -H 'Content-Type: application/json' \
      -d '{
        "email": "test@example.com",
@@ -121,7 +121,7 @@ For command-line testing, you can use curl commands.
 2. **Create a Story**:
    ```bash
    curl -X 'POST' \
-     'http://localhost:8000/stories/' \
+     'http://localhost:8080/stories/' \
      -H 'Content-Type: application/json' \
      -d '{
        "title": "The Magical Forest",
@@ -136,19 +136,19 @@ For command-line testing, you can use curl commands.
 3. **Check Story Status**:
    ```bash
    curl -X 'GET' \
-     'http://localhost:8000/stories/paste-story-id-here/status'
+     'http://localhost:8080/stories/paste-story-id-here/status'
    ```
 
 4. **Get Story Details**:
    ```bash
    curl -X 'GET' \
-     'http://localhost:8000/stories/paste-story-id-here'
+     'http://localhost:8080/stories/paste-story-id-here'
    ```
 
 5. **Get User Stories**:
    ```bash
    curl -X 'GET' \
-     'http://localhost:8000/users/paste-user-id-here/stories'
+     'http://localhost:8080/users/paste-user-id-here/stories'
    ```
 
 ## Method 4: Using Python Requests
@@ -160,7 +160,7 @@ import requests
 import json
 import time
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = "http://localhost:8080"
 
 # Create a user
 user_response = requests.post(
@@ -241,7 +241,7 @@ When testing with mock services, you can verify the media files as follows:
 
 1. **Server Not Running**:
    - Ensure the server is running using one of the startup methods in the README
-   - Check if the server is accessible at `http://localhost:8000/health`
+   - Check if the server is accessible at `http://localhost:8080/health`
 
 2. **Database Connection Issues**:
    - Verify your Supabase credentials in the `.env` file
