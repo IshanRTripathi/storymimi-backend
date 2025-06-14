@@ -5,7 +5,7 @@ import logging
 
 from app.models.user import User, UserCreate, UserResponse, UserStoriesResponse
 from app.services.story_service import StoryService
-from app.database.supabase_client import SupabaseClient
+from app.database.supabase_client import UserRepository
 
 # Create a logger for this module
 logger = logging.getLogger(__name__)
@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/users", tags=["users"])
 
 # Dependency to get a SupabaseClient instance
-async def get_db_client():
-    """Dependency to get a SupabaseClient instance"""
-    return SupabaseClient()
+async def get_user_repository():
+    """Dependency to get a UserRepository instance"""
+    return UserRepository()
 
 # Dependency to get a StoryService instance
 async def get_story_service():
@@ -24,7 +24,7 @@ async def get_story_service():
     return StoryService()
 
 @router.post("/", response_model=UserResponse, status_code=201)
-async def create_user(user: UserCreate, db_client: SupabaseClient = Depends(get_db_client)):
+async def create_user(user: UserCreate, user_repo: UserRepository = Depends(get_user_repository)):
     """Create a new user
     
     Args:
@@ -39,7 +39,7 @@ async def create_user(user: UserCreate, db_client: SupabaseClient = Depends(get_
     """
     logger.info(f"Creating new user with username: {user.username}, email: {user.email}")
     try:
-        result = await db_client.create_user(user.email, user.username)
+        result = await user_repo.create_user(user.email, user.username)
         logger.debug(f"User creation result: {result}")
         if not result:
             logger.error("Failed to create user: No result returned from database")
@@ -57,7 +57,7 @@ async def create_user(user: UserCreate, db_client: SupabaseClient = Depends(get_
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{user_id}", response_model=UserResponse)
-async def get_user(user_id: UUID, db_client: SupabaseClient = Depends(get_db_client)):
+async def get_user(user_id: UUID, user_repo: UserRepository = Depends(get_user_repository)):
     """Get a user by ID
     
     Args:

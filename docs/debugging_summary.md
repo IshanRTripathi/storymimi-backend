@@ -1,14 +1,5 @@
 ### 1. Environment Variable Handling
-- **Issue**: Environment variables were not being properly loaded from `.env` file
-- **Changes**:
-  ```python
-  # In config.py
-  @classmethod
-  def get_instance(cls):
-      """Get a new instance of settings with fresh environment variables"""
-      load_dotenv()
-      return cls()
-  ```
+- **Issue**: Environment variables were not being properly loaded from `.env` file, they are cached due to pydantic implementation
 
 ### 2. Supabase Client Initialization
 - **Issue**: Incorrect handling of async operations and Supabase responses

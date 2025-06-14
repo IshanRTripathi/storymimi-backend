@@ -19,24 +19,43 @@ logger = logging.getLogger(__name__)
 def generate_story_task(self, story_id: str, request_dict: Dict[str, Any]):
     """
     Celery task to generate a complete story with text, images, and audio.
-
+    
     Args:
         self: Celery task instance.
         story_id: ID of the story.
         request_dict: StoryRequest data as dictionary.
-
+    
     Returns:
         Dictionary with the task result.
     """
+    """
+    Celery task to generate a complete story with text, images, and audio.
+    Uses run_in_executor to handle async operations within the task.
+    
+    Args:
+        self: Celery task instance.
+        story_id: ID of the story.
+        request_dict: StoryRequest data as dictionary.
+    
+    Returns:
+        Dictionary with the task result.
+    """
+    
     logger.info(f"[TASK] Starting story generation task for story_id={story_id}")
 
-    loop = asyncio.get_event_loop()
+    # Run async story generation in a new event loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
     request = StoryRequest(**request_dict)
-
     logger.debug(f"[TASK] Request received: prompt='{request.prompt[:50]}...', "
                  f"style='{request.style}', num_scenes={request.num_scenes}")
-
+    
+    # Run async operation synchronously
     result = loop.run_until_complete(generate_story_async(story_id, request))
+    
+    # Clean up event loop
+    loop.close()
     
     # Validate model data before conversion (story completion)
     Validator.validate_model_data(result, is_completion=True)

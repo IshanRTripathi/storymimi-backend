@@ -690,7 +690,7 @@ class SupabaseClient:
         
         filters = {}
         if status:
-            filters["status"] = status.value
+            filters["status"] = status
             
         self._log_operation("count", "stories", filters=filters)
         logger.info(f"Counting stories with filters: {filters}")
@@ -699,7 +699,7 @@ class SupabaseClient:
             query = self.client.table("stories").select("*", count="exact")
             
             if status:
-                query = query.eq("status", status.value)
+                query = query.eq("status", status)
                 
             response = query.execute()
             count = response.count if hasattr(response, 'count') else 0

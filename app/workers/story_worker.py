@@ -5,7 +5,11 @@ from typing import Dict, Any
 from app.models.story_types import StoryRequest, StoryStatus
 from app.services.ai_service import AIService
 from app.services.story_extractor import StoryExtractor
-from app.database.supabase_client import SupabaseClient
+from app.database.supabase_client import (
+    StoryRepository,
+    SceneRepository,
+    StorageService
+)
 from app.utils.validator import Validator
 from app.utils.json_converter import JSONConverter
 
@@ -26,10 +30,13 @@ async def generate_story_async(story_id: str, request: StoryRequest) -> Dict[str
     logger.info(f"[WORKER] Starting story generation for story_id={story_id}")
     
     try:
-        db_client = SupabaseClient()
+        # Initialize repositories
+        story_repo = StoryRepository()
+        scene_repo = SceneRepository()
+        storage_service = StorageService()
         
-        # Update status to processing
-        await db_client.update_story_status(story_id, StoryStatus.PROCESSING)
+        # Update story status to processing
+        await story_repo.update_story_status(story_id, StoryStatus.PROCESSING)
         
         async with AIService() as ai_service:
             prompt = StoryExtractor.build_generation_prompt(request)
@@ -48,46 +55,35 @@ async def generate_story_async(story_id: str, request: StoryRequest) -> Dict[str
             logger.info(f"[WORKER] Extracted {len(story_data['scenes'])} scenes for story_id={story_id}")
             
             # Create story object
-            story = Story(
-                story_id=story_id,
-                title=story_data.get("title", "Untitled"),
-                scenes=[
-                    Scene(
-                        text=s["text"],
-                        image_prompt=s.get("image_prompt", f"An illustration for: {s['text'][:100]}...")
-                    )
-                    for s in story_data["scenes"]
-                ],
-                status=StoryStatus.PROCESSING,
-                user_id=request.user_id,
-                created_at=datetime.now().isoformat()
-            )
+            story = await story_repo.create_story(request.title, request.prompt, request.num_scenes)
             
             # Process scenes
-            for i, scene in enumerate(story.scenes):
-                logger.info(f"[WORKER] Processing scene {i+1}/{len(story.scenes)}")
+            scenes = []
+            for i, scene_data in enumerate(story_data["scenes"]):
+                logger.info(f"[WORKER] Processing scene {i+1}/{len(story_data['scenes'])}")
                 
                 # Generate media
-                image_bytes = await ai_service.generate_image(scene.image_prompt)
-                audio_bytes = await ai_service.generate_audio(scene.text)
+                image_bytes = await ai_service.generate_image(scene_data.get("image_prompt", f"An illustration for: {scene_data['text'][:100]}..."))
+                audio_bytes = await ai_service.generate_audio(scene_data["text"])
                 
                 # Update scene with media URLs
-                scene.image_url = await db_client.upload_image(story_id, i, image_bytes)
-                scene.audio_url = await db_client.upload_audio(story_id, i, audio_bytes)
+                scene_data["image_url"] = await storage_service.upload_image(story_id, i, image_bytes)
+                scene_data["audio_url"] = await storage_service.upload_audio(story_id, i, audio_bytes)
                 
                 # Create scene in database
-                await db_client.create_scene(
+                scene = await scene_repo.create_scene(
                     story_id=story_id,
-                    sequence=i,
-                    text=scene.text,
-                    image_url=scene.image_url,
-                    audio_url=scene.audio_url
+                    sequence=scene_data['sequence'],
+                    text=scene_data['text'],
+                    image_url=scene_data.get('image_url', ''),
+                    audio_url=scene_data.get('audio_url', '')
                 )
+                scenes.append(scene)
                 
                 logger.info(f"[WORKER] Scene {i+1} created successfully")
             
             # Update story status to complete
-            await db_client.update_story_status(story_id, StoryStatus.COMPLETE)
+            await story_repo.update_story_status(story_id, StoryStatus.COMPLETE)
             
             # Create and return response
             response = StoryResponse(

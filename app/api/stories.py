@@ -5,7 +5,7 @@ import logging
 import uuid
 from datetime import datetime
 
-from app.database.supabase_client import SupabaseClient
+from app.database.supabase_client import StoryRepository, SceneRepository, StorageService
 from app.models.story_types import StoryRequest, StoryResponse, StoryDetail, StoryStatus
 from app.services.story_service import StoryService
 from app.utils.json_converter import JSONConverter
@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/stories", tags=["stories"])
 
 # Dependency to get a StoryService instance
-async def get_story_service():
+async def get_story_service(db_client: StoryRepository = Depends(StoryRepository)):
     """Dependency to get a StoryService instance"""
-    return StoryService()
+    return StoryService(db_client)
 
 @router.post("/", response_model=StoryResponse, status_code=202)
 async def create_story(request: StoryRequest, service: StoryService = Depends(get_story_service)):
@@ -149,7 +149,7 @@ async def update_story_status(
         try:
             new_status = StoryStatus(status_data["status"])
         except ValueError:
-            valid_statuses = [s.value for s in StoryStatus]
+            valid_statuses = [s for s in StoryStatus]
             logger.warning(f"Invalid status value: {status_data['status']} for story {story_id}. Valid values: {valid_statuses}")
             raise HTTPException(
                 status_code=400, 
@@ -162,7 +162,7 @@ async def update_story_status(
             logger.warning(f"Story with ID {story_id} not found for status update")
             raise HTTPException(status_code=404, detail=f"Story with ID {story_id} not found")
             
-        logger.info(f"Story status updated successfully: {story_id} -> {new_status.value}")
+        logger.info(f"Story status updated successfully: {story_id} -> {new_status}")
         return {"success": True}
     except HTTPException:
         raise

@@ -1,10 +1,11 @@
 import logging
 from typing import Dict
 
-from app.database.supabase_client import SupabaseClient
+from app.database.supabase_client import StorageService
 from app.models.story_types import StoryStatus, StoryRequest
 from app.services.ai_service import AIService
 from app.services.story_extractor import StoryExtractor
+from app.services.image_generator_services import ImageGeneratorService
 
 logger = logging.getLogger(__name__)
 

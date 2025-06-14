@@ -4,7 +4,7 @@ import logging
 from typing import Dict, List, Any, Optional
 from uuid import UUID
 
-from app.database.supabase_client import SupabaseClient
+from app.database.supabase_client import StoryRepository
 from app.models.story_types import StoryRequest, StoryResponse, StoryStatus, StoryDetail, Scene
 from app.models.user import UserResponse
 from app.tasks.generate_story_task import generate_story_task
@@ -17,12 +17,13 @@ logger = logging.getLogger(__name__)
 class StoryService:
     """Service for orchestrating story creation and management"""
 
-    def __init__(self):
-        self.db_client = SupabaseClient()
+    def __init__(self, db_client: StoryRepository):
+        self.db_client = db_client
 
     async def create_new_story(self, request: StoryRequest) -> Dict[str, Any]:
         """
         Create a new story and dispatch the generation task to Celery.
+        Uses run_in_executor to handle sync storage operations in async context.
         """
         logger.info(f"Creating new story with title: {request.title}, prompt: {request.prompt[:50]}..., user_id: {request.user_id}")
         try:
@@ -49,7 +50,13 @@ class StoryService:
             }, is_initial_creation=True)
 
             logger.debug(f"Dispatching story generation task to Celery for story ID: {story_id}")
-            generate_story_task.delay(story_id, request.dict())
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,  # Use default executor
+                generate_story_task.delay,
+                story_id,
+                request.dict()
+            )
             logger.info(f"Story generation task dispatched for story ID: {story_id}")
 
             response = {
@@ -227,15 +234,15 @@ class StoryService:
 
     async def update_story_status(self, story_id: UUID, status: StoryStatus) -> bool:
         """Update the status of a story"""
-        logger.info(f"Updating status for story ID: {story_id} to {status.value}")
+        logger.info(f"Updating status for story ID: {story_id} to {status}")
         start_time = time.time()
 
         try:
-            success = await self.db_client.update_story_status(story_id, status.value)
+            success = await self.db_client.update_story_status(story_id, status)
 
             elapsed = time.time() - start_time
             if success:
-                logger.info(f"Story status updated successfully in {elapsed:.2f}s: {story_id} -> {status.value}")
+                logger.info(f"Story status updated successfully in {elapsed:.2f}s: {story_id} -> {status}")
             else:
                 logger.warning(f"Story status update returned no data in {elapsed:.2f}s: {story_id}")
 

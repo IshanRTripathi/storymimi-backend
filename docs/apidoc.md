@@ -905,7 +905,7 @@ async def get_story(story_id: str, service: StoryService = Depends(get_story_ser
 
 @router.put("/stories/{story_id}/status", response_model=StoryResponse)
 async def update_story_status(story_id: str, status: StoryStatus, service: StoryService = Depends(get_story_service)):
-    logger.info(f"API request to update story status: {story_id} -> {status.value}")
+    logger.info(f"API request to update story status: {story_id} -> {status}")
     
     try:
         success = await service.update_story_status(story_id, status)

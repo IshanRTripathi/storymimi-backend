@@ -1,8 +1,9 @@
 import logging
+import asyncio
 from datetime import datetime
 from typing import Dict, Any
 
-from app.database.supabase_client import SupabaseClient
+from app.database.supabase_client import StoryRepository, StorageService
 from app.models.story_types import StoryStatus, StoryRequest, StoryResponse, Scene
 from app.services.ai_service import AIService
 from app.services.story_extractor import StoryExtractor
@@ -24,7 +25,8 @@ async def generate_story_async(story_id: str, request: StoryRequest) -> Dict[str
     Returns:
         A dictionary with the task result.
     """
-    db_client = SupabaseClient()
+    db_client = StoryRepository()
+    storage_service = StorageService()
     logger.info(f"[GENERATOR] Started generation for story_id={story_id}")
 
     try:
@@ -63,14 +65,30 @@ async def generate_story_async(story_id: str, request: StoryRequest) -> Dict[str
             
             # 3.1 Generate image for scene
             logger.debug(f"[GENERATOR] Generating image for scene {i+1}")
-            image_bytes = await ai_service.generate_image(
-                scene.image_prompt,
-                width=768,
-                height=432
+            image_bytes = await ai_service.generate_image(scene.image_prompt, 768, 432)
+            
+            # Set timestamps for the scene
+            now = datetime.now()
+            scene.created_at = now
+            scene.updated_at = now
+            
+            # 3.2 Upload image to storage
+            logger.debug(f"[GENERATOR] Uploading image for scene {i+1}")
+            
+            # Create a new event loop for the sync operation
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            # Run the sync operation in the new loop
+            image_url = loop.run_until_complete(
+                storage_service.upload_image(story_id, i, image_bytes)
             )
             
-            scene.image_url = await db_client.upload_image(story_id, i, image_bytes)
-            logger.debug(f"[GENERATOR] Image URL: {scene.image_url}")
+            # Clean up the event loop
+            loop.close()
+            
+            scene.image_url = image_url
+            logger.debug(f"[GENERATOR] Image URL: {image_url}")
             
             # 3.2 Generate audio for scene
             logger.debug(f"[GENERATOR] Generating audio for scene {i+1}")
@@ -89,7 +107,17 @@ async def generate_story_async(story_id: str, request: StoryRequest) -> Dict[str
             
             logger.info(f"[GENERATOR] Scene {i+1} created successfully")
         
-        # 4. Get the updated story from database
+        # 4. Return the final result with all required fields
+        now = datetime.now()
+        return {
+            "story_id": story_id,
+            "title": story_data["title"],
+            "status": "success",
+            "scenes": [dict(scene) for scene in scenes],
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+            "user_id": request.user_id
+        }
         logger.info(f"[GENERATOR] Fetching updated story from database for story_id={story_id}")
         story = await db_client.get_story(story_id)
         if not story:
@@ -100,13 +128,11 @@ async def generate_story_async(story_id: str, request: StoryRequest) -> Dict[str
         
         logger.info(f"[GENERATOR] Story generated successfully for story_id={story_id}")
         
-        # Create response with database data and scenes
-        # Use the database story data directly, no need to create a new StoryResponse
-        story_data = story.copy()
+        # Get the actual story data from the database
+        story_data = await db_client.get_story(story_id)
         story_data['scenes'] = [dict(scene) for scene in scenes]
-        return story_data
         
-        return JSONConverter.from_story_response(response)
+        return story_data
         
     except Exception as e:
         logger.exception(f"[GENERATOR] Error occurred for story_id={story_id}")
