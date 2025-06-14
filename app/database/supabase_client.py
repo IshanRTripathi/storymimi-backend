@@ -334,16 +334,22 @@ class SupabaseClient:
         logger.info(f"Updating story status for ID: {story_id_str} to {status_value}")
         
         try:
-            response = self.client.table("stories").update({"status": status_value}).eq("story_id", story_id_str).execute()
-            success = bool(response.data)
+            # Update the story status
+            response = self.client.table("stories") \
+                .update({"status": status_value}) \
+                .eq("story_id", story_id_str) \
+                .execute()
             
             elapsed = time.time() - start_time
-            if success:
-                logger.info(f"Story status updated successfully in {elapsed:.2f}s: {story_id_str} -> {status_value}")
-            else:
-                logger.warning(f"Story status update returned no data in {elapsed:.2f}s: {story_id_str}")
-                
-            return success
+            
+            # Validate response data
+            if not response.data:
+                logger.warning(f"No data returned from Supabase after updating story_id={story_id_str}. This is not an error.")
+                return True
+            
+            logger.debug(f"Updated story: {response.data}")
+            logger.info(f"Story status updated successfully in {elapsed:.2f}s: {story_id_str} -> {status_value}")
+            return True
         except Exception as e:
             elapsed = time.time() - start_time
             logger.error(f"Failed to update story status in {elapsed:.2f}s: {str(e)}", exc_info=True)

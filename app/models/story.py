@@ -23,6 +23,7 @@ class StoryResponse(BaseModel):
     """Initial response with story ID and status"""
     story_id: UUID = Field(..., description="Unique identifier for the story")
     status: StoryStatus = Field(..., description="Current status of story generation")
+    title: str = Field(..., description="Title of the story")
     created_at: datetime = Field(default_factory=datetime.now, description="When the story was created")
 
 class Scene(BaseModel):
@@ -44,3 +45,13 @@ class StoryDetail(BaseModel):
     created_at: datetime = Field(..., description="When the story was created")
     updated_at: Optional[datetime] = Field(None, description="When the story was last updated")
     scenes: List[Scene] = Field(default_factory=list, description="List of scenes in the story")
+    
+    @classmethod
+    def from_story_response(cls, response: StoryResponse) -> "StoryDetail":
+        """Create a StoryDetail from a StoryResponse"""
+        return cls(
+            story_id=response.story_id,
+            title=response.title,
+            status=response.status,
+            created_at=response.created_at
+        )

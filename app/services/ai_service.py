@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any
 
 import httpx
 from app.config import settings
+from app.mocks.mock_ai_service import MockAIService
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -12,13 +13,23 @@ logger = logging.getLogger(__name__)
 class AIService:
     """Service for interacting with AI APIs (OpenRouter, Together.ai, ElevenLabs)"""
     
+    def __init__(self):
+        """Initialize the service with either real or mock implementation"""
+        if settings.USE_MOCK_AI_SERVICES:
+            logger.info("Using mock AI service implementation")
+            self.mock_service = MockAIService(settings.MOCK_DELAY_SECONDS)
+        
     async def __aenter__(self):
         """Initialize the httpx client when entering the context manager"""
+        if settings.USE_MOCK_AI_SERVICES:
+            return self.mock_service
         self.client = httpx.AsyncClient()
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Close the httpx client when exiting the context manager"""
+        if settings.USE_MOCK_AI_SERVICES:
+            return
         await self.client.aclose()
     
     async def generate_text(self, prompt: str) -> str:
@@ -33,6 +44,10 @@ class AIService:
         Raises:
             Exception: If the API call fails
         """
+        if settings.USE_MOCK_AI_SERVICES:
+            logger.info("Using mock text generation")
+            return await self.mock_service.generate_text(prompt)
+        
         logger.debug(f"Generating text with prompt length: {len(prompt)}")
         
         headers = {
@@ -84,6 +99,50 @@ class AIService:
         Raises:
             Exception: If the API call fails
         """
+        if settings.USE_MOCK_AI_SERVICES:
+            logger.info("Using mock image generation")
+            return await self.mock_service.generate_image(prompt, width, height, steps, seed)
+        
+        logger.debug(f"Generating image with prompt length: {len(prompt)}, dimensions: {width}x{height}")
+        
+        headers = {
+            "Authorization": f"Bearer {settings.TOGETHER_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": settings.FLUX_MODEL_NAME,
+            "prompt": prompt,
+            "width": width,
+            "height": height,
+            "steps": steps,
+        }
+        
+        if seed is not None:
+            payload["seed"] = seed
+            logger.debug(f"Using seed: {seed} for image generation")
+        
+        try:
+            logger.debug(f"Sending request to Together.ai API with model: {settings.FLUX_MODEL_NAME}")
+            response = await self.client.post(
+                f"{settings.TOGETHER_BASE_URL}/v1/image/create",
+                headers=headers,
+                json=payload,
+                timeout=60.0  # Longer timeout for image generation
+            )
+            response.raise_for_status()
+            
+            data = response.json()
+            logger.debug("Successfully received image data from Together.ai API")
+            
+            # Decode the base64 image
+            image_data = base64.b64decode(data["output"]["data"][0])
+            logger.debug(f"Successfully decoded image data, size: {len(image_data)} bytes")
+            return image_data
+        except Exception as e:
+            logger.error(f"Error generating image: {str(e)}", exc_info=True)
+            raise
+        
         logger.debug(f"Generating image with prompt length: {len(prompt)}, dimensions: {width}x{height}")
         
         headers = {
@@ -138,6 +197,10 @@ class AIService:
         Raises:
             Exception: If the API call fails
         """
+        if settings.USE_MOCK_AI_SERVICES:
+            logger.info("Using mock audio generation")
+            return await self.mock_service.generate_audio(text, voice_id)
+        
         logger.debug(f"Generating audio for text of length: {len(text)}, voice_id: {voice_id}")
         
         headers = {

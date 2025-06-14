@@ -2,10 +2,13 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Dict, Any, List
 from uuid import UUID
 import logging
+import uuid
+from datetime import datetime
 
 from app.database.supabase_client import SupabaseClient
 from app.models.story import StoryRequest, StoryResponse, StoryDetail, StoryStatus
 from app.services.story_service import StoryService
+from app.utils.json_converter import JSONConverter
 
 # Create a logger for this module
 logger = logging.getLogger(__name__)
@@ -36,13 +39,29 @@ async def create_story(request: StoryRequest, service: StoryService = Depends(ge
     try:
         result = await service.create_new_story(request)
         logger.info(f"Story created successfully with ID: {result['story_id']}")
-        return StoryResponse(
-            story_id=result["story_id"],
-            status=StoryStatus(result["status"])
-        )
+        response = JSONConverter.parse_json(result, StoryResponse)
+        return response
     except Exception as e:
         logger.error(f"Error creating story: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        # Generate a UUID for the error response
+        error_uuid = str(uuid.uuid4())
+        
+        error_response = StoryResponse(
+            story_id=error_uuid,
+            status=StoryStatus.FAILED.value,
+            title="Error",
+            created_at=datetime.now()
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": str(e),
+                "story_id": str(error_uuid),
+                "status": StoryStatus.FAILED.value,
+                "title": "Error",
+                "created_at": datetime.now().isoformat()
+            }
+        )
 
 @router.get("/{story_id}", response_model=StoryDetail)
 async def get_story(story_id: UUID, service: StoryService = Depends(get_story_service)):

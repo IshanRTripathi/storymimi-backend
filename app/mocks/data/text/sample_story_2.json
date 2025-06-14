@@ -1,0 +1,35 @@
+{
+    "title": "The Dragon's Treasure",
+    "scenes": [
+        {
+            "text": "In a land of fire and ice, a brave knight named Sir Cedric was tasked with retrieving the legendary Dragon's Treasure. The treasure was said to grant eternal wisdom and protect its bearer from all harm. Sir Cedric set off on his quest with nothing but his trusty sword and unwavering courage.",
+            "image_prompt": "A knight in armor standing before a fiery dragon's lair",
+            "audio_url": "",
+            "image_url": ""
+        },
+        {
+            "text": "His journey took him through treacherous mountains and across raging rivers. Along the way, he met a wise old hermit who warned him of the dragon's cunning mind and powerful magic. The hermit gave Sir Cedric a magical amulet to protect him from the dragon's spells.",
+            "image_prompt": "A wise old hermit presenting a glowing amulet to the knight",
+            "audio_url": "",
+            "image_url": ""
+        },
+        {
+            "text": "Finally reaching the dragon's lair, Sir Cedric found himself face to face with the mighty creature. The dragon, sensing his noble purpose, challenged him to a battle of wits rather than strength. For three days and nights they debated, with Sir Cedric using his wisdom to outsmart the dragon.",
+            "image_prompt": "A knight debating with a dragon in its fiery cave",
+            "audio_url": "",
+            "image_url": ""
+        },
+        {
+            "text": "Impressed by Sir Cedric's wisdom and courage, the dragon revealed that the true treasure was not gold or jewels, but the knowledge and experience gained on his journey. The dragon bestowed upon Sir Cedric the title of Dragon's Sage and gifted him with a book of ancient wisdom.",
+            "image_prompt": "The dragon presenting a glowing book to the knight",
+            "audio_url": "",
+            "image_url": ""
+        },
+        {
+            "text": "Returning home, Sir Cedric shared his newfound wisdom with his people, becoming not just a hero but a wise leader who guided his kingdom to prosperity and peace.",
+            "image_prompt": "The knight returning home with the book of wisdom, people cheering",
+            "audio_url": "",
+            "image_url": ""
+        }
+    ]
+}

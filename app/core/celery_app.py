@@ -21,6 +21,14 @@ celery_app.conf.update(
     broker_connection_retry_on_startup=True,
 )
 
-# Import tasks to ensure they are registered with Celery
-# This import is placed here to avoid circular imports
-from app.workers import story_worker  # noqa
+# Configure Celery to automatically discover tasks
+celery_app.conf.task_routes = {
+    'app.tasks.*': {'queue': 'storymimi'}
+}
+
+celery_app.conf.beat_schedule = {
+    # Add periodic tasks here if needed
+}
+
+# Add autodiscover tasks
+celery_app.autodiscover_tasks(['app.tasks'])
