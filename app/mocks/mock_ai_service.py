@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from app.utils.validator import Validator
 from app.models.story_types import StoryRequest
+from datetime import datetime, timezone
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -71,17 +72,21 @@ class MockAIService:
         story_id = str(request.story_id) if hasattr(request, "story_id") else str(uuid.uuid4())
         prompt = getattr(request, "prompt", "default prompt")
         
-        for i in range(1, num_scenes + 1):
+        now = datetime.utcnow()
+        for i in range(num_scenes):  
             scene = {
                 "scene_id": str(uuid.uuid4()),
                 "story_id": story_id,
                 "sequence": i,
-                "text": f"Scene {i}: {prompt}",
-                "image_prompt": f"An illustration for: {prompt[:100]}...",
-                "image_url": f"https://mock-image-url.com/story/{story_id}/scene/{i}",
-                "audio_url": f"https://mock-audio-url.com/story/{story_id}/scene/{i}"
+                "text": f"Scene {i+1}: {prompt}",
+                "image_url": f"https://example.com/image_{i}.png",
+                "audio_url": f"https://example.com/audio_{i}.mp3",
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
             }
             scenes.append(scene)
+        
+        logger.info(f"[MOCK] Generated {len(scenes)} scenes")
         
         return {
             "story_id": story_id,
@@ -90,7 +95,6 @@ class MockAIService:
             "scenes": scenes,
             "user_id": str(request.user_id)
         }
-        os.makedirs(MOCK_DATA_DIR / "audio", exist_ok=True)
         
         logger.debug(f"Mock data directories created at {MOCK_DATA_DIR}")
     

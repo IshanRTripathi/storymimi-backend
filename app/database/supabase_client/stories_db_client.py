@@ -156,9 +156,10 @@ class StoryRepository(SupabaseBaseClient):
         start_time = time.time()
         story_id_str = str(story_id)
         
+        # Convert datetime to ISO string
         update_data = {
             **data,
-            "updated_at": datetime.now(),
+            "updated_at": datetime.now().isoformat(),
             "updated_by": str(user_id) if user_id else None
         }
         
@@ -320,6 +321,69 @@ class StoryRepository(SupabaseBaseClient):
             logger.error(f"Failed to get recent stories in {elapsed:.2f}s: {str(e)}", exc_info=True)
             raise
     
+    async def create_scene(
+        self,
+        story_id: str,
+        sequence: int,
+        text: str,
+        image_url: str,
+        audio_url: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Create a new scene for a story
+        
+        Args:
+            story_id: ID of the story
+            sequence: Sequence number of the scene
+            text: Scene text content
+            image_url: URL of the scene's image
+            audio_url: URL of the scene's audio
+            created_at: Creation timestamp (can be datetime or ISO string)
+            updated_at: Last update timestamp (can be datetime or ISO string)
+            
+        Returns:
+            The created scene data or None if creation failed
+            
+        Raises:
+            Exception: If scene creation fails
+        """
+        start_time = time.time()
+        story_id_str = str(story_id)
+        
+        # Generate scene_id
+        scene_id = str(uuid.uuid4())
+       
+        # Generate timestamps
+        now = datetime.now().isoformat()
+
+        scene_data = {
+            "scene_id": scene_id,
+            "story_id": story_id_str,
+            "sequence": sequence,
+            "text": text,
+            "image_url": image_url,
+            "audio_url": audio_url,
+            "created_at": now,
+            "updated_at": now
+        }
+        
+        self._log_operation("insert", "scenes", scene_data)
+        logger.info(f"Creating scene {sequence} for story: {story_id_str}")
+        
+        try:
+            response = self.client.table("scenes").insert(scene_data).execute()
+            
+            if not response.data:
+                logger.error(f"Failed to create scene: No data returned from database")
+                return None
+                
+            elapsed = time.time() - start_time
+            logger.info(f"Scene created successfully in {elapsed:.2f}s: {story_id_str}")
+            return response.data[0]
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"Failed to create scene in {elapsed:.2f}s: {str(e)}", exc_info=True)
+            raise
+
     async def get_user_story_count(self, user_id: Union[str, UUID]) -> int:
         """Get the count of stories created by a user
         

@@ -1,7 +1,10 @@
 from typing import Dict, Any, List, Optional
 from uuid import UUID
-from app.models.story_types import StoryStatus
+from datetime import datetime
+from app.models.story_types import Scene, StoryStatus
+import logging
 
+logger = logging.getLogger(__name__)
 
 class Validator:
     """Simple validator for story data structures"""
@@ -47,21 +50,49 @@ class Validator:
             # For completion validation, scenes are optional in error cases
             if data.get("status") != "failed":
                 required_fields.extend(["scenes"])
-            required_fields.extend(["created_at", "updated_at", "user_id"])
             
-        for field in required_fields:
-            if field not in data:
-                raise ValueError(f"Missing required field: {field}")
-                
+            # Always require timestamps for non-initial creation
+            required_fields.extend(["created_at", "updated_at"])
+            
+            # Only require user_id if it's not a failed status
+            if data.get("status") != "failed":
+                required_fields.extend(["user_id"])
+            
+            # For failed status, add error message if present
+            if data.get("status") == "failed" and "error" in data:
+                required_fields.extend(["error"])
+            
+        # Check for missing required fields
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+            
+        # Validate field types
         if not isinstance(data["story_id"], str):
             raise ValueError("Story ID must be a string")
             
         if not isinstance(data["user_id"], (str, UUID)):
             raise ValueError("User ID must be a string or UUID")
             
+        # Validate timestamps
         if not is_initial_creation:
+            if "created_at" not in data or "updated_at" not in data:
+                raise ValueError("Timestamps are required for non-initial creation")
+            
+            # Validate timestamps are strings
             if not isinstance(data["created_at"], str) or not isinstance(data["updated_at"], str):
                 raise ValueError("Timestamps must be strings")
+                
+            # Validate timestamps are valid ISO format strings
+            try:
+                datetime.fromisoformat(data["created_at"])
+                datetime.fromisoformat(data["updated_at"])
+            except ValueError:
+                raise ValueError("Timestamps must be valid ISO format strings")
+                
+            # Validate created_at is not after updated_at
+            if data["created_at"] > data["updated_at"]:
+                raise ValueError("created_at cannot be after updated_at")
         
         # Validate status
         if "status" in data:
@@ -80,13 +111,44 @@ class Validator:
             scenes = data["scenes"]
             if not isinstance(scenes, list):
                 raise ValueError("Scenes must be a list")
+            logger.info(f"[VALIDATOR] Validating {len(scenes)} scenes - {scenes}")    
             for scene in scenes:
-                if not isinstance(scene, dict):
-                    raise ValueError("Each scene must be a dictionary")
-                if "text" not in scene:
-                    raise ValueError("Each scene must have a 'text' field")
+                # Check if scene is already a Scene model instance
+                if isinstance(scene, Scene):
+                    scene_dict = scene.dict()
+                else:
+                    # If not, ensure it's a dictionary
+                    if not isinstance(scene, dict):
+                        raise ValueError("Each scene must be a dictionary")
+                    scene_dict = scene
+                
+                # Validate required scene fields
+                required_scene_fields = ["text", "image_url", "audio_url", "created_at", "updated_at"]
+                missing_scene_fields = [field for field in required_scene_fields if field not in scene_dict]
+                if missing_scene_fields:
+                    raise ValueError(f"Scene is missing required fields: {', '.join(missing_scene_fields)}")
+                
+                    
+                # Validate field types
                 if not isinstance(scene["text"], str) or not scene["text"].strip():
                     raise ValueError("Scene text must be a non-empty string")
+                    
+                if not isinstance(scene["image_url"], str):
+                    raise ValueError("Scene image_url must be a string")
+                    
+                if not isinstance(scene["audio_url"], str):
+                    raise ValueError("Scene audio_url must be a string")
+                    
+                # Validate scene timestamps
+                try:
+                    scene_created_at = datetime.fromisoformat(scene["created_at"])
+                    scene_updated_at = datetime.fromisoformat(scene["updated_at"])
+                    if scene_created_at > scene_updated_at:
+                        raise ValueError("Scene created_at cannot be after updated_at")
+                except ValueError:
+                    raise ValueError("Scene timestamps must be valid ISO format strings")
+                except TypeError:
+                    raise ValueError("Scene timestamps must be strings")
 
     @staticmethod
     def validate_scene(scene: Dict[str, Any]) -> None:

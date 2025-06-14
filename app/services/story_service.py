@@ -55,7 +55,8 @@ class StoryService:
                 None,  # Use default executor
                 generate_story_task.delay,
                 story_id,
-                request.dict()
+                request.dict(),
+                request.user_id
             )
             logger.info(f"Story generation task dispatched for story ID: {story_id}")
 

@@ -2,16 +2,28 @@ import io
 import uuid
 from typing import Dict, List, Optional, Any, Union, Tuple
 from datetime import datetime
+from pathlib import Path
 
 from app.database.supabase_client.base_db_client import SupabaseBaseClient
 import logging
 import time
-import asyncio
 
 logger = logging.getLogger(__name__)
 
+class StorageError(Exception):
+    """Base exception for storage-related errors"""
+    pass
+
+class StorageApiError(StorageError):
+    """Exception for storage API errors"""
+    pass
+
 class StorageService(SupabaseBaseClient):
     """Service for Supabase Storage operations"""
+    
+    DEFAULT_CACHE_CONTROL = "max-age=31536000"  # 1 year
+    AUDIO_BUCKET = "audio"
+    IMAGE_BUCKET = "images"
     
     def __init__(self):
         """Initialize storage service with proper client"""
@@ -26,172 +38,160 @@ class StorageService(SupabaseBaseClient):
             public: Whether the bucket should be public
             
         Raises:
-            Exception: If bucket creation fails
+            StorageError: If bucket creation fails
         """
         logger.debug(f"Ensuring bucket exists: {bucket_name}")
         
         try:
-            # Create bucket with public access
-            self.storage.create_bucket(bucket_name)
-            logger.info(f"Bucket created or already exists: {bucket_name}")
-        except Exception as e:
-            logger.warning(f"Failed to create bucket: {str(e)}")
-            # Check if bucket exists by listing files
+            # Check if bucket exists
+            buckets = self.storage.list_buckets()
+            existing_bucket = next((b for b in buckets if b.id == bucket_name), None)
+            
+            if existing_bucket:
+                logger.info(f"Bucket {bucket_name} already exists")
+                return
+                
+            # Set bucket options based on type
+            if bucket_name == self.IMAGE_BUCKET:
+                options = {
+                    "public": True,
+                    "file_size_limit": 52428800,  # 50MB
+                    "allowed_mime_types": ["image/*"]
+                }
+            else:  # AUDIO_BUCKET
+                options = {
+                    "public": True,
+                    "file_size_limit": 52428800,  # 50MB
+                    "allowed_mime_types": ["audio/*"]
+                }
+            
             try:
-                files = self.storage.from_(bucket_name).list()
-                if files:
-                    logger.debug(f"Bucket already exists: {bucket_name}")
-                    return
-            except Exception as list_error:
-                logger.warning(f"Failed to list files in bucket: {str(list_error)}")
-                raise e from None
+                self.storage.create_bucket(bucket_name, options=options)
+                logger.info(f"Bucket created: {bucket_name}")
+            except Exception as e:
+                logger.error(f"Failed to create bucket {bucket_name}: {str(e)}")
+                raise StorageError(f"Failed to create bucket {bucket_name}") from e
+            logger.info(f"Bucket created: {bucket_name}")
+            
+        except Exception as e:
+            logger.error(f"Failed to ensure bucket {bucket_name} exists: {str(e)}")
+            raise StorageError(f"Failed to ensure bucket {bucket_name} exists") from e
 
-    async def upload_image(self, story_id: str, scene_index: int, image_bytes: bytes) -> str:
+    def upload_image(self, story_id: str, scene_index: int, image_bytes: bytes) -> str:
         """Upload an image to Supabase Storage and return the public URL
         
         Args:
-            story_id: ID of the story
-            scene_index: Index of the scene
-            image_bytes: Bytes of the image to upload
+            story_id: The ID of the story
+            scene_index: The index of the scene
+            image_bytes: The image bytes to upload
             
         Returns:
-            str: Public URL of the uploaded image
+            str: The public URL of the uploaded image
             
         Raises:
-            Exception: If upload fails
+            StorageError: If the upload fails
         """
-        logger.info(f"Uploading image for story: {story_id}, scene: {scene_index}")
-        start_time = time.time()
-        
-        # Create a unique filename
-        filename = f"scene_{scene_index}_{uuid.uuid4()}.png"
-        bucket_name = "story-images"
-        
         try:
-            # Ensure bucket exists
-            await self._ensure_bucket_exists(bucket_name)
+            # Generate unique filename
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            filename = f"story_{story_id}_scene_{scene_index}_{timestamp}.png"
             
-            # Upload the image with proper content type using run_in_executor
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,  # Use default executor
-                lambda: self.storage.from_(bucket_name).upload(
-                    file=image_bytes,
-                    path=filename,
-                    file_options={"content-type": "image/png"}
-                )
+            # Upload file
+            file_path = f"stories/{story_id}/{filename}"
+            self._ensure_bucket_exists(self.IMAGE_BUCKET)
+            
+            # Ensure image_bytes is in bytes format
+            if isinstance(image_bytes, str):
+                image_bytes = image_bytes.encode()
+            
+            # Upload the file
+            result = self.storage.from_(self.IMAGE_BUCKET).upload(
+                file_path,
+                image_bytes,
+                {
+                    'Content-Type': 'image/png',
+                    'Cache-Control': self.DEFAULT_CACHE_CONTROL
+                }
             )
             
-            # Get the public URL
-            public_url = f"https://{settings.SUPABASE_URL}/storage/v1/object/public/{bucket_name}/{filename}"
-            logger.info(f"Image uploaded successfully in {time.time() - start_time:.2f}s: {public_url}")
-            return public_url
+            # Get public URL
+            url = self.storage.from_(self.IMAGE_BUCKET).get_public_url(file_path)
+            logger.info(f"Image uploaded successfully: {url}")
+            return url
             
         except Exception as e:
-            elapsed = time.time() - start_time
-            logger.error(f"Failed to upload image in {elapsed:.2f}s: {str(e)}", exc_info=True)
-            raise
+            logger.error(f"Failed to upload image: {str(e)}")
+            raise StorageError(f"Failed to upload image: {str(e)}") from e
     
-    async def upload_image(self, story_id: Union[str, uuid.UUID], scene_sequence: int, image_bytes: bytes) -> str:
-        """Upload an image to Supabase Storage and return the public URL
-        
-        Args:
-            story_id: The ID of the story
-            scene_sequence: The sequence number of the scene
-            image_bytes: The image data as bytes
-            
-        Returns:
-            The public URL of the uploaded image
-            
-        Raises:
-            Exception: If image upload fails
+    def upload_audio(self, story_id: str, scene_index: int, audio_bytes: bytes) -> str:
         """
-        start_time = time.time()
-        story_id_str = str(story_id)
-        bucket_name = "story-images"
-        file_path = f"{story_id_str}/{scene_sequence}.png"
-        
-        logger.info(f"Uploading image for story: {story_id_str}, scene: {scene_sequence}")
-        
-        try:
-            # Ensure the bucket exists
-            await self._ensure_bucket_exists(bucket_name)
-            
-            # Check if image data is valid
-            if not image_bytes or len(image_bytes) < 100:
-                logger.error(f"Invalid image data: too small or empty ({len(image_bytes) if image_bytes else 0} bytes)")
-                raise ValueError("Invalid image data: too small or empty")
-            
-            # Upload the image
-            logger.debug(f"Uploading image to {bucket_name}/{file_path}")
-            
-            # Convert bytes to BytesIO and use it directly
-            image_io = io.BytesIO(image_bytes)
-            image_io.seek(0)
-            
-            try:
-                # Use the upload method with file content
-                await self.storage.from_(bucket_name).upload(
-                    file_path,
-                    image_io.getvalue(),  # Use getvalue() to get bytes
-                    file_options={"content-type": "image/png"}
-                )
-            except Exception as upload_error:
-                logger.error(f"Error uploading image: {str(upload_error)}")
-                raise
-            finally:
-                # Clean up the BytesIO object
-                image_io.close()
-            
-            # Get the public URL
-            public_url = await self.storage.from_(bucket_name).get_public_url(file_path)
-            
-            elapsed = time.time() - start_time
-            logger.info(f"Image uploaded successfully in {elapsed:.2f}s: {public_url}")
-            return public_url
-        except Exception as e:
-            elapsed = time.time() - start_time
-            raise
-        finally:
-            # Log the end of the operation
-            self._log_operation("upload", "images")
-    
-    async def upload_audio(self, story_id: Union[str, uuid], scene_sequence: int, audio_bytes: bytes) -> str:
-        """Upload an audio file to Supabase Storage and return the public URL
+        Upload an audio file to Supabase Storage and return the public URL
         
         Args:
             story_id: The ID of the story
-            scene_sequence: The sequence number of the scene
+            scene_index: The index of the scene
             audio_bytes: The audio data as bytes
             
         Returns:
-            The public URL of the uploaded audio
+            str: The public URL of the uploaded audio
             
         Raises:
-            Exception: If audio upload fails
+            StorageError: If upload fails
         """
         start_time = time.time()
-        story_id_str = str(story_id)
-        bucket_name = "story-audio"
-        file_path = f"{story_id_str}/scene_{scene_sequence}.mp3"
-        
         try:
-            # Create BytesIO object and ensure it's reset to start
-            audio_io = io.BytesIO(audio_bytes)
-            audio_io.seek(0)
+            # Create unique filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"story_{story_id}_scene_{scene_index}_{timestamp}.mp3"
             
-            # Upload using the utility method
-            return await self._upload_file(bucket_name, file_path, audio_io.getvalue(), "audio/mpeg")
+            # Upload file
+            # Use forward slashes for Supabase paths
+            file_path = f"audio/{story_id}/{filename}"
+            self._ensure_bucket_exists(self.AUDIO_BUCKET)
+            
+            # Upload the file
+            result = self.storage.from_(self.AUDIO_BUCKET).upload(
+                file_path,
+                audio_bytes,
+                {
+                    'Content-Type': 'audio/mpeg',
+                    'Cache-Control': self.DEFAULT_CACHE_CONTROL
+                }
+            )
+            
+            if not result:
+                raise StorageError("Upload failed: No result returned")
+                
+            # Get public URL
+            url = self.storage.from_(self.AUDIO_BUCKET).get_public_url(str(file_path))
+            
+            logger.info(f"Audio uploaded successfully: {url}")
+            return url
+            
         except Exception as e:
             elapsed = time.time() - start_time
             logger.error(f"Failed to upload audio in {elapsed:.2f}s: {str(e)}", exc_info=True)
-            raise
-        finally:
-            # Clean up the BytesIO object
-            if hasattr(audio_io, 'close'):
-                audio_io.close()
+            raise StorageError(f"Failed to upload audio: {str(e)}") from e
     
-    async def delete_file(self, bucket_name: str, file_path: str) -> bool:
+    def delete_file(self, bucket_name: str, file_path: str) -> bool:
+        """Delete a file from Supabase Storage
+        
+        Args:
+            bucket_name: The name of the bucket
+            file_path: The path to the file
+            
+        Returns:
+            bool: True if deletion was successful
+            
+        Raises:
+            StorageError: If deletion fails
+        """
+        try:
+            result = self.storage.from_(bucket_name).remove([file_path])
+            return bool(result)
+        except Exception as e:
+            logger.error(f"Failed to delete file {file_path} from bucket {bucket_name}: {str(e)}")
+            raise StorageError(f"Failed to delete file: {str(e)}") from e
         """Delete a file from Supabase Storage
         
         Args:
