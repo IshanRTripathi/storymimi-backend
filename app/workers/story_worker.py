@@ -2,11 +2,11 @@ import asyncio
 import logging
 from typing import Dict, Any
 
-from app.models.story import StoryRequest, StoryStatus
+from app.models.story_types import StoryRequest, StoryStatus
 from app.services.ai_service import AIService
 from app.services.story_extractor import StoryExtractor
 from app.database.supabase_client import SupabaseClient
-from app.utils.story_validator import validate_story_data
+from app.utils.validator import Validator
 from app.utils.json_converter import JSONConverter
 
 logger = logging.getLogger(__name__)
@@ -38,8 +38,9 @@ async def generate_story_async(story_id: str, request: StoryRequest) -> Dict[str
             
             logger.debug(f"[WORKER] Raw AI output for story_id={story_id}: {story_text[:250]}...")
             
-            # Parse story data
+            # Parse and validate AI response
             story_data = StoryExtractor.extract_story_data(story_text, request.num_scenes)
+            Validator.validate_ai_response(story_data)
             
             if not story_data.get("scenes"):
                 raise ValueError("No scenes extracted from AI response")
@@ -57,7 +58,7 @@ async def generate_story_async(story_id: str, request: StoryRequest) -> Dict[str
                     )
                     for s in story_data["scenes"]
                 ],
-                status=StoryStatus.PROCESSING.value,
+                status=StoryStatus.PROCESSING,
                 user_id=request.user_id,
                 created_at=datetime.now().isoformat()
             )

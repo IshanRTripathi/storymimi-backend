@@ -20,6 +20,16 @@ logging.basicConfig(
     ]
 )
 
+# Suppress Celery timer logs
+logging.getLogger('celery.timer').setLevel(logging.WARNING)
+
+# Suppress other Celery debug logs
+logging.getLogger('celery').setLevel(logging.INFO)
+
+# Suppress hpack debug logs
+logging.getLogger('hpack').setLevel(logging.WARNING)
+logging.getLogger('hpack.hpack').setLevel(logging.WARNING)
+
 # Create a logger for this module
 logger = logging.getLogger(__name__)
 

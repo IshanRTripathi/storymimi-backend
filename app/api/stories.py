@@ -6,9 +6,10 @@ import uuid
 from datetime import datetime
 
 from app.database.supabase_client import SupabaseClient
-from app.models.story import StoryRequest, StoryResponse, StoryDetail, StoryStatus
+from app.models.story_types import StoryRequest, StoryResponse, StoryDetail, StoryStatus
 from app.services.story_service import StoryService
 from app.utils.json_converter import JSONConverter
+from app.utils.validator import Validator
 
 # Create a logger for this module
 logger = logging.getLogger(__name__)
@@ -37,7 +38,12 @@ async def create_story(request: StoryRequest, service: StoryService = Depends(ge
     """
     logger.info(f"Creating new story with title: {request.title}, user_id: {request.user_id}")
     try:
+        # Validate the request data as a request object
         result = await service.create_new_story(request)
+        
+        # Validate model data before database operations
+        Validator.validate_model_data(result, is_initial_creation=True)
+        
         logger.info(f"Story created successfully with ID: {result['story_id']}")
         response = JSONConverter.parse_json(result, StoryResponse)
         return response
@@ -48,8 +54,9 @@ async def create_story(request: StoryRequest, service: StoryService = Depends(ge
         
         error_response = StoryResponse(
             story_id=error_uuid,
-            status=StoryStatus.FAILED.value,
+            status=StoryStatus.FAILED,
             title="Error",
+            user_id=request.user_id,
             created_at=datetime.now()
         )
         raise HTTPException(
@@ -57,7 +64,7 @@ async def create_story(request: StoryRequest, service: StoryService = Depends(ge
             detail={
                 "error": str(e),
                 "story_id": str(error_uuid),
-                "status": StoryStatus.FAILED.value,
+                "status": StoryStatus.FAILED,
                 "title": "Error",
                 "created_at": datetime.now().isoformat()
             }
@@ -81,6 +88,9 @@ async def get_story(story_id: UUID, service: StoryService = Depends(get_story_se
     try:
         story = await service.get_story_detail(story_id)
         logger.info(f"Successfully retrieved story with ID: {story_id}, title: {story.title}, status: {story.status}")
+        
+        # Validate the story data as a response object
+        StoryValidator.validate_story_data(story.dict())
         return story
     except Exception as e:
         logger.error(f"Error retrieving story with ID {story_id}: {str(e)}", exc_info=True)

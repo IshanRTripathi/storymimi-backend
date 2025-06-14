@@ -1,7 +1,6 @@
 from typing import Dict, List, Optional, Any
 import logging
-from app.models.story import StoryStatus
-from app.models.story_entities import Scene
+from app.models.story_types import StoryStatus, Scene
 from app.utils.json_converter import JSONConverter
 
 logger = logging.getLogger(__name__)

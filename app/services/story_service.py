@@ -5,10 +5,11 @@ from typing import Dict, List, Any, Optional
 from uuid import UUID
 
 from app.database.supabase_client import SupabaseClient
-from app.models.story import StoryRequest, StoryResponse, StoryStatus, StoryDetail, Scene
+from app.models.story_types import StoryRequest, StoryResponse, StoryStatus, StoryDetail, Scene
 from app.models.user import UserResponse
 from app.tasks.generate_story_task import generate_story_task
 from app.utils.json_converter import JSONConverter
+from app.utils.validator import Validator
 
 logger = logging.getLogger(__name__)
 
@@ -38,16 +39,25 @@ class StoryService:
 
             story_id = story["story_id"]
             logger.info(f"Story record created with ID: {story_id}")
+            
+            # Validate model data before returning (allowing partial data for initial creation)
+            Validator.validate_model_data({
+                "story_id": story_id,
+                "title": request.title,
+                "status": StoryStatus.PENDING,
+                "user_id": request.user_id
+            }, is_initial_creation=True)
 
             logger.debug(f"Dispatching story generation task to Celery for story ID: {story_id}")
             generate_story_task.delay(story_id, request.dict())
             logger.info(f"Story generation task dispatched for story ID: {story_id}")
 
-            response = StoryResponse(
-                status=StoryStatus.PENDING.value,
-                story_id=story_id,
-                title=request.title
-            )
+            response = {
+                "status": StoryStatus.PENDING,
+                "story_id": story_id,
+                "title": request.title,
+                "user_id": request.user_id
+            }
             return JSONConverter.from_story_response(response)
         except Exception as e:
             logger.exception(f"Error creating story: {str(e)}")

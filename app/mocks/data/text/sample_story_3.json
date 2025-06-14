@@ -2,34 +2,29 @@
     "title": "The Lost City of Light",
     "scenes": [
         {
+            "sequence": 0,
             "text": "In a world where magic was fading, a young archaeologist named Alex discovered ancient maps leading to the legendary City of Light. The city was said to hold the secrets of restoring magic to the world. Alex gathered a team of experts and set out on an expedition to find this mythical place.",
-            "image_prompt": "A young archaeologist examining ancient maps with a team of experts",
-            "audio_url": "",
-            "image_url": ""
+            "image_prompt": "A young archaeologist examining ancient maps with a team of experts"
         },
         {
+            "sequence": 1,
             "text": "Their journey took them through treacherous deserts and across raging rivers. Along the way, they encountered ancient traps and puzzles left by the city's builders. Alex's knowledge of ancient languages proved crucial in deciphering the clues.",
-            "image_prompt": "The team crossing a desert with ancient ruins in the background",
-            "audio_url": "",
-            "image_url": ""
+            "image_prompt": "The team crossing a desert with ancient ruins in the background"
         },
         {
+            "sequence": 2,
             "text": "After months of searching, they finally found the entrance to the city hidden behind a waterfall. Inside, they discovered magnificent architecture glowing with residual magic. The city was filled with wonders that had been lost to time.",
-            "image_prompt": "A glowing city entrance hidden behind a waterfall",
-            "audio_url": "",
-            "image_url": ""
+            "image_prompt": "A glowing city entrance hidden behind a waterfall"
         },
         {
+            "sequence": 3,
             "text": "In the heart of the city, they found the Chamber of Light - a room filled with crystals that stored the city's magic. Alex realized that the crystals needed to be recharged by the light of the morning star.",
-            "image_prompt": "A crystal chamber glowing with magical light",
-            "audio_url": "",
-            "image_url": ""
+            "image_prompt": "A crystal chamber glowing with magical light"
         },
         {
+            "sequence": 43,
             "text": "Returning to the surface at dawn, they witnessed the crystals absorbing the morning star's light. The magic began to spread, slowly restoring power to the world. Alex became known as the one who brought magic back to the land.",
-            "image_prompt": "The crystals glowing brightly under the morning star",
-            "audio_url": "",
-            "image_url": ""
+            "image_prompt": "The crystals glowing brightly under the morning star"
         }
     ]
 }

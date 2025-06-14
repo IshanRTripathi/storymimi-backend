@@ -4,11 +4,12 @@ import logging
 import time
 from typing import Dict, List, Optional, Any, Union, Tuple
 from uuid import UUID
+from datetime import datetime
 
 from supabase.client import create_client, Client
 
 from app.config import settings
-from app.models.story import StoryStatus, Scene, StoryDetail
+from app.models.story_types import StoryStatus, StoryDetail
 from app.models.user import User, UserResponse
 
 # Create a logger for this module
@@ -258,7 +259,7 @@ class SupabaseClient:
             "story_id": story_id_str,
             "title": title,
             "prompt": prompt,
-            "status": StoryStatus.PENDING.value,
+            "status": StoryStatus.PENDING,
             "user_id": user_id_str
         }
         
@@ -313,12 +314,13 @@ class SupabaseClient:
             logger.error(f"Failed to get story in {elapsed:.2f}s: {str(e)}", exc_info=True)
             raise
     
-    async def update_story_status(self, story_id: Union[str, UUID], status: StoryStatus) -> bool:
-        """Update the status of a story
+    async def update_story_status(self, story_id: Union[str, UUID], status: StoryStatus, user_id: Optional[UUID] = None) -> bool:
+        """Update the status of a story with audit trail
         
         Args:
             story_id: The ID of the story to update
             status: The new status to set
+            user_id: Optional ID of user performing the update
             
         Returns:
             True if update was successful, False otherwise
@@ -326,41 +328,25 @@ class SupabaseClient:
         Raises:
             Exception: If status update fails
         """
-        start_time = time.time()
-        story_id_str = str(story_id)
-        status_value = status.value
-        
-        self._log_operation("update", "stories", {"status": status_value}, filters={"story_id": story_id_str})
-        logger.info(f"Updating story status for ID: {story_id_str} to {status_value}")
-        
         try:
-            # Update the story status
-            response = self.client.table("stories") \
-                .update({"status": status_value}) \
-                .eq("story_id", story_id_str) \
-                .execute()
-            
-            elapsed = time.time() - start_time
-            
-            # Validate response data
-            if not response.data:
-                logger.warning(f"No data returned from Supabase after updating story_id={story_id_str}. This is not an error.")
-                return True
-            
-            logger.debug(f"Updated story: {response.data}")
-            logger.info(f"Story status updated successfully in {elapsed:.2f}s: {story_id_str} -> {status_value}")
-            return True
+            update_data = {
+                "status": status,
+                "updated_at": datetime.now().isoformat(),
+                "updated_by": str(user_id) if user_id else None
+            }
+            response = self.client.table("stories").update(update_data).eq("story_id", str(story_id)).execute()
+            return bool(response.data)
         except Exception as e:
-            elapsed = time.time() - start_time
-            logger.error(f"Failed to update story status in {elapsed:.2f}s: {str(e)}", exc_info=True)
-            raise
+            logger.error(f"Error updating story status: {str(e)}", exc_info=True)
+            return False
             
-    async def update_story(self, story_id: Union[str, UUID], data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Update a story's information
+    async def update_story(self, story_id: Union[str, UUID], data: Dict[str, Any], user_id: Optional[UUID] = None) -> Optional[Dict[str, Any]]:
+        """Update a story's information with audit trail
         
         Args:
             story_id: The ID of the story to update
             data: Dictionary containing fields to update
+            user_id: Optional ID of user performing the update
             
         Returns:
             The updated story data or None if update failed
@@ -371,11 +357,17 @@ class SupabaseClient:
         start_time = time.time()
         story_id_str = str(story_id)
         
-        self._log_operation("update", "stories", data, filters={"story_id": story_id_str})
-        logger.info(f"Updating story with ID: {story_id_str}, fields: {list(data.keys())}")
+        update_data = {
+            **data,
+            "updated_at": datetime.now().isoformat(),
+            "updated_by": str(user_id) if user_id else None
+        }
+        
+        self._log_operation("update", "stories", update_data, filters={"story_id": story_id_str})
+        logger.info(f"Updating story with ID: {story_id_str}, fields: {list(update_data.keys())}")
         
         try:
-            response = self.client.table("stories").update(data).eq("story_id", story_id_str).execute()
+            response = self.client.table("stories").update(update_data).eq("story_id", story_id_str).execute()
             
             if not response.data:
                 logger.warning(f"Story update failed, no data returned: {story_id_str}")
@@ -429,39 +421,20 @@ class SupabaseClient:
             logger.error(f"Failed to delete story in {elapsed:.2f}s: {str(e)}", exc_info=True)
             raise
     
-    async def create_scene(self, story_id: Union[str, UUID], sequence: int, text: str, 
-                          image_url: Optional[str] = None, audio_url: Optional[str] = None) -> Dict[str, Any]:
-        """Create a new scene for a story
+    async def create_scene(self, story_id: Union[str, UUID], sequence: int, text: str, image_url: str, audio_url: str, user_id: Optional[UUID] = None) -> bool:
+        """Create a new scene for a story with audit trail
         
         Args:
-            story_id: The ID of the story this scene belongs to
+            story_id: The ID of the story
             sequence: The sequence number of the scene
             text: The text content of the scene
-            image_url: Optional URL to the scene's image
-            audio_url: Optional URL to the scene's audio narration
+            image_url: URL to the scene's image
+            audio_url: URL to the scene's audio
+            user_id: Optional ID of user creating the scene
             
         Returns:
-            The created scene data or None if creation failed
-            
-        Raises:
-            Exception: If scene creation fails
+            bool: True if scene was created successfully, False otherwise
         """
-        start_time = time.time()
-        scene_id = uuid.uuid4()
-        scene_id_str = str(scene_id)
-        story_id_str = str(story_id)
-        
-        scene_data = {
-            "scene_id": scene_id_str,
-            "story_id": story_id_str,
-            "sequence": sequence,
-            "text": text,
-            "image_url": image_url,
-            "audio_url": audio_url
-        }
-        
-        self._log_operation("insert", "scenes", scene_data)
-        logger.info(f"Creating new scene with ID: {scene_id_str}, story_id: {story_id_str}, sequence: {sequence}")
         
         try:
             response = self.client.table("scenes").insert(scene_data).execute()
@@ -629,7 +602,7 @@ class SupabaseClient:
             # Bucket doesn't exist, create it
             logger.info(f"Creating bucket: {bucket_name}, public: {public}")
             try:
-                self.storage.create_bucket(bucket_name, public=public)
+                self.storage.create_bucket(bucket_name, public_access=public)
                 logger.info(f"Bucket created successfully: {bucket_name}")
             except Exception as create_error:
                 logger.error(f"Failed to create bucket {bucket_name}: {str(create_error)}", exc_info=True)
@@ -667,11 +640,28 @@ class SupabaseClient:
                 
             # Upload the image
             logger.debug(f"Uploading image to {bucket_name}/{file_path}")
-            self.storage.from_(bucket_name).upload(
-                file_path,
-                io.BytesIO(image_bytes),
-                file_options={"content-type": "image/png"}
-            )
+            try:
+                # Convert bytes to BytesIO and use it directly
+                image_io = io.BytesIO(image_bytes)
+                image_io.seek(0)
+                
+                try:
+                    # Use the upload method with file content
+                    self.storage.from_(bucket_name).upload(
+                        file_path,
+                        image_io.getvalue(),  # Use getvalue() to get bytes
+                        file_options={"content-type": "image/png"}
+                    )
+                except Exception as e:
+                    logger.error(f"Error uploading image: {str(e)}")
+                    raise
+                finally:
+                    # Clean up the BytesIO object
+                    image_io.close()
+                success = True
+            except Exception as e:
+                logger.error(f"Error uploading image: {str(e)}")
+                raise
             
             # Get the public URL
             public_url = self.storage.from_(bucket_name).get_public_url(file_path)
@@ -681,7 +671,7 @@ class SupabaseClient:
             return public_url
         finally:
             # Log the end of the operation
-            self._log_operation("upload", "images", success=True)
+            self._log_operation("upload", "images")
         
     # Advanced query methods
     async def count_stories(self, status: Optional[StoryStatus] = None) -> int:
@@ -910,11 +900,52 @@ class SupabaseClient:
             elapsed = time.time() - start_time
             logger.error(f"Supabase connection check failed in {elapsed:.2f}s: {str(e)}", exc_info=True)
             return False
+            
+    async def _upload_file(self, bucket_name: str, file_path: str, file_bytes: bytes, content_type: str) -> str:
+        """Upload a file to Supabase Storage and return the public URL
+        
+        Args:
+            bucket_name: The name of the bucket
+            file_path: The path to the file within the bucket
+            file_bytes: The file data as bytes
+            content_type: The MIME type of the file
+            
+        Returns:
+            The public URL of the uploaded file
+            
+        Raises:
+            Exception: If file upload fails
+        """
+        start_time = time.time()
+        
+        # Ensure the bucket exists
+        await self._ensure_bucket_exists(bucket_name)
+        
+        try:
+            # Check if file data is valid
+            if not file_bytes or len(file_bytes) < 100:
+                logger.error(f"Invalid file data: too small or empty ({len(file_bytes) if file_bytes else 0} bytes)")
+                raise ValueError("Invalid file data: too small or empty")
+                
+            # Upload the file using bytes directly
+            logger.debug(f"Uploading file to {bucket_name}/{file_path}")
+            self.storage.from_(bucket_name).upload(
+                file_path,
+                file_bytes,  # Pass bytes directly
+                file_options={"content-type": content_type}
+            )
+            
+            # Get the public URL
+            public_url = self.storage.from_(bucket_name).get_public_url(file_path)
+            
+            elapsed = time.time() - start_time
+            logger.info(f"File uploaded successfully in {elapsed:.2f}s: {public_url}")
+            return public_url
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error(f"Failed to upload image in {elapsed:.2f}s: {str(e)}", exc_info=True)
+            logger.error(f"Failed to upload file in {elapsed:.2f}s: {str(e)}", exc_info=True)
             raise
-    
+            
     async def upload_audio(self, story_id: Union[str, UUID], scene_sequence: int, audio_bytes: bytes) -> str:
         """Upload an audio file to Supabase Storage and return the public URL
         
@@ -929,41 +960,61 @@ class SupabaseClient:
         Raises:
             Exception: If audio upload fails
         """
-        start_time = time.time()
-        story_id_str = str(story_id)
         bucket_name = "story-audio"
-        file_path = f"{story_id_str}/{scene_sequence}.mp3"
-        
-        logger.info(f"Uploading audio for story: {story_id_str}, scene: {scene_sequence}")
+        file_path = f"{story_id}/scene_{scene_sequence}.mp3"
         
         try:
-            # Ensure the bucket exists
-            await self._ensure_bucket_exists(bucket_name)
+            # Create BytesIO object and ensure it's reset to start
+            audio_io = io.BytesIO(audio_bytes)
+            audio_io.seek(0)
             
-            # Check if audio data is valid
-            if not audio_bytes or len(audio_bytes) < 100:
-                logger.error(f"Invalid audio data: too small or empty ({len(audio_bytes) if audio_bytes else 0} bytes)")
-                raise ValueError("Invalid audio data: too small or empty")
-                
-            # Upload the audio
-            logger.debug(f"Uploading audio to {bucket_name}/{file_path}")
-            self.storage.from_(bucket_name).upload(
-                file_path,
-                io.BytesIO(audio_bytes),
-                file_options={"content-type": "audio/mpeg"}
-            )
-            
-            # Get the public URL
-            public_url = self.storage.from_(bucket_name).get_public_url(file_path)
-            
-            elapsed = time.time() - start_time
-            logger.info(f"Audio uploaded successfully in {elapsed:.2f}s: {public_url}")
-            return public_url
+            # Upload using the utility method
+            return await self._upload_file(bucket_name, file_path, audio_io.getvalue(), "audio/mpeg")
         except Exception as e:
             elapsed = time.time() - start_time
             logger.error(f"Failed to upload audio in {elapsed:.2f}s: {str(e)}", exc_info=True)
             raise
+        finally:
+            # Clean up the BytesIO object
+            if hasattr(audio_io, 'close'):
+                audio_io.close()
+                
+    async def upload_image(self, story_id: Union[str, UUID], scene_sequence: int, image_bytes: bytes) -> str:
+        """Upload an image to Supabase Storage and return the public URL
+        
+        Args:
+            story_id: The ID of the story
+            scene_sequence: The sequence number of the scene
+            image_bytes: The image data as bytes
             
+        Returns:
+            The public URL of the uploaded image
+            
+        Raises:
+            Exception: If image upload fails
+        """
+        bucket_name = "story-images"
+        file_path = f"{story_id}/scene_{scene_sequence}.png"
+        
+        # Ensure the bucket exists
+        await self._ensure_bucket_exists(bucket_name)
+        
+        try:
+            # Create BytesIO object and ensure it's reset to start
+            image_io = io.BytesIO(image_bytes)
+            image_io.seek(0)
+            
+            # Upload using the utility method
+            return await self._upload_file(bucket_name, file_path, image_io.getvalue(), "image/png")
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"Failed to upload image in {elapsed:.2f}s: {str(e)}", exc_info=True)
+            raise
+        finally:
+            # Clean up the BytesIO object
+            if hasattr(image_io, 'close'):
+                image_io.close()
+                
     async def delete_file(self, bucket_name: str, file_path: str) -> bool:
         """Delete a file from Supabase Storage
         

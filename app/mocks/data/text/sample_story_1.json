@@ -1,38 +1,30 @@
 {
     "title": "The Crystal Keeper's Quest",
-    "story_id": "123e4567-e89b-12d3-a456-426614174000",
-    "status": "COMPLETE",
-    "created_at": "2025-06-14T11:15:00+05:30",
     "scenes": [
         {
+            "sequence": 0,
             "text": "Once upon a time in a magical forest, a young adventurer named Lily discovered a hidden path leading to an ancient temple. The temple was guarded by mystical creatures who tested her courage and wisdom. After solving their riddles, Lily was granted access to the temple's inner chamber, where she found a glowing crystal that could heal the sick forest. With the crystal in hand, Lily returned to her village as a hero, bringing life back to the dying trees and animals.",
-            "image_prompt": "A young girl standing triumphantly in a forest clearing, holding a glowing crystal while trees and animals come back to life",
-            "audio_url": "",
-            "image_url": ""
+            "image_prompt": "A young girl standing triumphantly in a forest clearing, holding a glowing crystal while trees and animals come back to life"
         },
         {
+            "sequence": 1,
             "text": "As days passed, Lily noticed that the crystal's power was fading. She consulted the village elder who told her about the Crystal Keeper, a wise sage who lived on the highest mountain peak. Determined to save her forest, Lily embarked on a new journey to find the Crystal Keeper.",
-            "image_prompt": "A village elder pointing to a distant mountain peak while Lily looks determined",
-            "audio_url": "",
-            "image_url": ""
+            "image_prompt": "A village elder pointing to a distant mountain peak while Lily looks determined"
         },
         {
+            "sequence": 2,
             "text": "The mountain path was treacherous, with steep cliffs and unpredictable weather. Along the way, Lily met a friendly mountain goat who guided her through the dangerous terrain. After three days of climbing, they finally reached the Crystal Keeper's hut.",
-            "image_prompt": "Lily climbing a steep mountain path with a helpful mountain goat",
-            "audio_url": "",
-            "image_url": ""
+            "image_prompt": "Lily climbing a steep mountain path with a helpful mountain goat"
         },
         {
+            "sequence": 3,
             "text": "The old sage welcomed Lily and explained that the crystal needed to be recharged under the light of the full moon at the ancient stone circle. Lily thanked the Crystal Keeper and hurried back down the mountain, as the full moon was only two nights away.",
-            "image_prompt": "An old sage standing in front of an ancient stone circle under a full moon",
-            "audio_url": "",
-            "image_url": ""
+            "image_prompt": "An old sage standing in front of an ancient stone circle under a full moon"
         },
         {
+            "sequence": 4,
             "text": "When they returned to the forest, the crystal's power had been restored, and the forest flourished once again. From that day forward, Lily became the new Crystal Keeper, protecting the forest and teaching others about the importance of harmony between humans and nature.",
-            "image_prompt": "Lily holding the restored crystal while the forest flourishes around her",
-            "audio_url": "",
-            "image_url": ""
+            "image_prompt": "Lily holding the restored crystal while the forest flourishes around her"
         }
     ]
 }

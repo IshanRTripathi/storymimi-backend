@@ -1,11 +1,11 @@
 import json
 import logging
-from typing import Dict, Any, Optional, Type, List
+from typing import Dict, Any, List, Type
 from pydantic import BaseModel
-from app.models.story import Scene, StoryResponse
+from app.models.story_types import Scene, StoryResponse, StoryDetail, StoryStatus
 from datetime import datetime
 from uuid import UUID
-from app.models.story import StoryStatus
+from app.utils.validator import Validator
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ class JSONConverter:
 
     @staticmethod
     def to_scene(data: Dict[str, Any]) -> Scene:
-        """Convert JSON data to Scene object
+        """Convert AI response data to Scene object
         
         Args:
             data: Dictionary containing scene data
@@ -27,13 +27,9 @@ class JSONConverter:
         """
         try:
             return Scene(
-                scene_id=UUID(data["scene_id"]),
-                story_id=UUID(data["story_id"]),
                 sequence=data["sequence"],
                 text=data["text"],
-                image_url=data.get("image_url"),
-                audio_url=data.get("audio_url"),
-                created_at=datetime.fromisoformat(data["created_at"])
+                image_prompt=data["image_prompt"]
             )
         except KeyError as e:
             raise ValueError(f"Missing required field: {str(e)}")
@@ -41,8 +37,8 @@ class JSONConverter:
             raise ValueError(f"Error creating Scene: {str(e)}")
 
     @staticmethod
-    def to_story_response(data: Dict[str, Any]) -> StoryResponse:
-        """Convert JSON data to StoryResponse object
+    def to_story_response(data: str | Dict[str, Any]) -> StoryResponse:
+        """Convert AI response data to StoryResponse object
         
         Args:
             data: Dictionary containing story response data
@@ -51,14 +47,26 @@ class JSONConverter:
             StoryResponse object
             
         Raises:
-            ValueError: If required fields are missing
+            ValueError: If required fields are missing or validation fails
         """
         try:
+            if isinstance(data, str):
+                # Try to parse as JSON
+                try:
+                    data = json.loads(data)
+                except json.JSONDecodeError:
+                    # If JSON parsing fails, treat as plain text
+                    return StoryResponse(
+                        status=data["status"],
+                        title=data["title"],
+                        error=data.get("error")
+                    )
+            
             return StoryResponse(
-                story_id=UUID(data["story_id"]),
-                status=StoryStatus(data["status"]),
+                status=data["status"],
                 title=data["title"],
-                created_at=datetime.fromisoformat(data["created_at"])
+                error=data.get("error"),
+                user_id=data["user_id"]
             )
         except KeyError as e:
             raise ValueError(f"Missing required field: {str(e)}")
@@ -67,7 +75,7 @@ class JSONConverter:
 
     @staticmethod
     def from_scene(scene: Scene) -> Dict[str, Any]:
-        """Convert Scene object to JSON data
+        """Convert Scene object to dictionary containing AI response data
         
         Args:
             scene: Scene object
@@ -75,32 +83,76 @@ class JSONConverter:
         Returns:
             Dictionary representation of the scene
         """
-        return {
-            "scene_id": str(scene.scene_id),
-            "story_id": str(scene.story_id),
-            "sequence": scene.sequence,
-            "text": scene.text,
-            "image_url": scene.image_url,
-            "audio_url": scene.audio_url,
-            "created_at": scene.created_at.isoformat()
-        }
+        return scene.to_dict()
 
     @staticmethod
-    def from_story_response(response: StoryResponse) -> Dict[str, Any]:
-        """Convert StoryResponse object to JSON data
+    def from_story_response(response: Any) -> Dict[str, Any]:
+        """Convert response to dictionary
         
         Args:
-            response: StoryResponse object
+            response: Response object or dictionary
             
         Returns:
             Dictionary representation of the response
         """
+        if isinstance(response, dict):
+            return {
+                "status": response.get("status", "UNKNOWN"),
+                "title": response.get("title", ""),
+                "error": response.get("error", None),
+                "story_id": str(response.get("story_id", None)) if response.get("story_id") else None,
+                "user_id": str(response.get("user_id", None)) if response.get("user_id") else None
+            }
         return {
             "status": response.status,
-            "story_id": str(response.story_id),
             "title": response.title,
-            "created_at": response.created_at.isoformat()
+            "error": response.error,
+            "story_id": str(response.story_id) if response.story_id else None
         }
+
+    @staticmethod
+    def from_story_detail(detail: StoryDetail) -> Dict[str, Any]:
+        """Convert StoryDetail to dictionary
+        
+        Args:
+            detail: StoryDetail object
+            
+        Returns:
+            Dictionary representation of the detail
+        """
+        return {
+            "story_id": str(detail.story_id),
+            "title": detail.title,
+            "status": detail.status,
+            "scenes": detail.scenes,
+            "user_id": str(detail.user_id),
+            "created_at": detail.created_at.isoformat(),
+            "updated_at": detail.updated_at.isoformat()
+        }
+
+    @staticmethod
+    def to_story_detail(data: Dict[str, Any]) -> StoryDetail:
+        """Convert dictionary to StoryDetail object
+        
+        Args:
+            data: Dictionary containing story detail
+            
+        Returns:
+            StoryDetail object
+        
+        Raises:
+            ValueError: If validation fails
+        """
+        Validator.validate_model_data(data, is_initial_creation=True)
+        return StoryDetail(
+            story_id=data["story_id"],
+            title=data["title"],
+            status=data["status"],
+            scenes=data["scenes"],
+            user_id=data["user_id"],
+            created_at=datetime.fromisoformat(data["created_at"]),
+            updated_at=datetime.fromisoformat(data["updated_at"])
+        )
 
     @staticmethod
     def parse_json(data: Any, cls: Type[BaseModel]) -> BaseModel:

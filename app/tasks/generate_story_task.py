@@ -2,11 +2,11 @@ import asyncio
 import logging
 from typing import Dict, Any
 
-from app.utils.story_validator import validate_story_data
+from app.utils.validator import Validator
 from app.utils.json_converter import JSONConverter
 from app.core.celery_app import celery_app
 
-from app.models.story import StoryRequest, StoryResponse
+from app.models.story_types import StoryRequest, StoryResponse
 from app.services.story_generator import generate_story_async
 
 # Setup logger
@@ -37,6 +37,9 @@ def generate_story_task(self, story_id: str, request_dict: Dict[str, Any]):
                  f"style='{request.style}', num_scenes={request.num_scenes}")
 
     result = loop.run_until_complete(generate_story_async(story_id, request))
+    
+    # Validate model data before conversion (story completion)
+    Validator.validate_model_data(result, is_completion=True)
     
     # Convert result to StoryResponse object
     response = JSONConverter.parse_json(result, StoryResponse)

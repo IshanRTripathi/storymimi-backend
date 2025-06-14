@@ -2,7 +2,7 @@ import logging
 from typing import Dict
 
 from app.database.supabase_client import SupabaseClient
-from app.models.story import StoryStatus, StoryRequest
+from app.models.story_types import StoryStatus, StoryRequest
 from app.services.ai_service import AIService
 from app.services.story_extractor import StoryExtractor
 

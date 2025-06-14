@@ -2,8 +2,13 @@ import asyncio
 import logging
 import os
 import random
+import json
+import uuid
+from uuid import UUID
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
+from app.utils.validator import Validator
+from app.models.story_types import StoryRequest
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -46,6 +51,45 @@ class MockAIService:
         # Create subdirectories for each type of data
         os.makedirs(MOCK_DATA_DIR / "text", exist_ok=True)
         os.makedirs(MOCK_DATA_DIR / "images", exist_ok=True)
+
+    async def generate_story(self, request: StoryRequest) -> Dict[str, Any]:
+        """Generate a mock story with scenes
+        
+        Args:
+            request: StoryRequest object containing story request data
+            
+        Returns:
+            Dictionary containing generated story data
+        """
+        logger.info("[MOCK] Generating story with prompt: %s", request.prompt)
+        
+        await asyncio.sleep(self.delay_seconds)
+        
+        # Generate mock scenes
+        scenes = []
+        num_scenes = getattr(request, "num_scenes", 3)
+        story_id = str(request.story_id) if hasattr(request, "story_id") else str(uuid.uuid4())
+        prompt = getattr(request, "prompt", "default prompt")
+        
+        for i in range(1, num_scenes + 1):
+            scene = {
+                "scene_id": str(uuid.uuid4()),
+                "story_id": story_id,
+                "sequence": i,
+                "text": f"Scene {i}: {prompt}",
+                "image_prompt": f"An illustration for: {prompt[:100]}...",
+                "image_url": f"https://mock-image-url.com/story/{story_id}/scene/{i}",
+                "audio_url": f"https://mock-audio-url.com/story/{story_id}/scene/{i}"
+            }
+            scenes.append(scene)
+        
+        return {
+            "story_id": story_id,
+            "title": getattr(request, "title", "Mock Story"),
+            "status": "success",
+            "scenes": scenes,
+            "user_id": str(request.user_id)
+        }
         os.makedirs(MOCK_DATA_DIR / "audio", exist_ok=True)
         
         logger.debug(f"Mock data directories created at {MOCK_DATA_DIR}")
@@ -65,8 +109,9 @@ class MockAIService:
         logger.debug(f"Simulating processing delay of {self.delay_seconds} seconds")
         await asyncio.sleep(self.delay_seconds)
         
-        # Get a list of all text files in the mock data directory
-        text_files = list((MOCK_DATA_DIR / "text").glob("*.txt"))
+        # Get a list of all text files in the mock data directory (both .txt and .json)
+        text_files = list((MOCK_DATA_DIR / "text").glob("*.txt")) + \
+                    list((MOCK_DATA_DIR / "text").glob("*.json"))
         logger.debug(f"Found {len(text_files)} sample text files in mock data directory")
         
         # If no text files exist, return a default text
@@ -90,6 +135,22 @@ class MockAIService:
         with open(text_file, "r", encoding="utf-8") as f:
             content = f.read()
             logger.debug(f"Successfully read text file with content length: {len(content)}")
+            
+            # If it's a JSON file, return the content as is
+            if text_file.suffix == '.json':
+                try:
+                    data = json.loads(content)
+                    logger.debug("Successfully parsed JSON data")
+                    
+                    # Validate story data structure
+                    Validator.validate_ai_response(data)
+                    
+                    # Return only AI-generated content
+                    return data
+                except json.JSONDecodeError:
+                    logger.warning("Failed to parse JSON, returning raw content")
+                    return content
+            
             return content
     
     async def generate_image(self, prompt: str, width: int = 768, height: int = 432, 
