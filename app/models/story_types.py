@@ -26,13 +26,13 @@ class Scene(BaseModel):
     image_url: Optional[str] = Field(
         None,
         description="URL of the scene image",
-        pattern=r'^https?://[\w.-]+(?:/[\w.-]*)*$',
+        pattern=r'^https?://[\w.-]+(?:/[\w.-]*)*\??$',
         max_length=2000
     )
     audio_url: Optional[str] = Field(
         None,
         description="URL of the scene audio",
-        pattern=r'^https?://[\w.-]+(?:/[\w.-]*)*$',
+        pattern=r'^https?://[\w.-]+(?:/[\w.-]*)*\??$',
         max_length=2000
     )
     created_at: datetime = Field(description="Creation timestamp")

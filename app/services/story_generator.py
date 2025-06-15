@@ -59,7 +59,7 @@ async def initialize_story(db_client: StoryRepository, request: StoryRequest, st
     created_story = await db_client.create_story(
         title=request.title,
         prompt=request.prompt,
-        user_id=request.user_id
+        user_id=user_id
     )
     
     if not created_story["story_id"]:
@@ -70,14 +70,7 @@ async def initialize_story(db_client: StoryRepository, request: StoryRequest, st
     if not story_data:
         raise ValueError(f"Story not found: {created_story['story_id']}")
     
-    # Add timestamps if not present
-    if "created_at" not in story_data:
-        story_data["created_at"] = datetime.utcnow().isoformat()
-    story_data["updated_at"] = datetime.utcnow().isoformat()
-    
-    # Add user_id if not present
-    if "user_id" not in story_data:
-        story_data["user_id"] = user_id
+    story_data["user_id"] = user_id
     
     return story_data
 
@@ -159,6 +152,8 @@ async def create_and_update_scene(db_client: StoryRepository, story_id: str, ind
         story_id=story_id,
         sequence=index,
         text=scene.text,
+        title=scene.title,
+        image_prompt=scene.image_prompt,
         image_url=scene.image_url,
         audio_url=scene.audio_url
     )
