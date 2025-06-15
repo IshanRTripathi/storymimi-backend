@@ -21,7 +21,7 @@ class StoryProcessor:
         Returns:
             Story data with backend fields added
         """
-        now = datetime.now(self.timezone)
+        now = datetime.now().isoformat()
         
         # Add story-level backend fields
         story_data["created_at"] = now.isoformat()

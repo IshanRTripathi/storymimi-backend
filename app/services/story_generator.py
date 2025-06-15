@@ -83,22 +83,26 @@ async def initialize_story(db_client: StoryRepository, request: StoryRequest, st
 
 async def generate_scenes(ai_service: AIService, request: StoryRequest, story_id: str) -> List[Scene]:
     """Generate scenes using AI service."""
-    ai_response = await ai_service.generate_story(request)
+    ai_response = await ai_service.generate_story(request, story_id)
     Validator.validate_ai_response(ai_response)
     
     if not ai_response.get("scenes"):
         raise ValueError("No scenes extracted from AI response")
         
     logger.info(f"[GENERATOR] Created {len(ai_response['scenes'])} scenes for story_id={story_id}")
-    
+    logger.info(f"[GENERATOR] AI Response scene data: {ai_response}")
     return [
         Scene(
-            title=f"Scene {i+1}",
-            description=s["text"],
-            text=s["text"],
-            image_prompt=s.get("image_prompt", f"An illustration for: {s['text'][:100]}...")
+            scene_id=s['scene_id'],
+            title=s['title'],
+            text=s['text'],
+            image_prompt=s['image_prompt'],
+            image_url=s.get('image_url'),
+            audio_url=s.get('audio_url'),
+            created_at=s['created_at'],
+            updated_at=s['updated_at']
         )
-        for i, s in enumerate(ai_response["scenes"])
+        for s in ai_response['scenes']
     ]
 
 async def process_scenes(db_client: StoryRepository, storage_service: StorageService, 
@@ -158,23 +162,18 @@ async def create_and_update_scene(db_client: StoryRepository, story_id: str, ind
         image_url=scene.image_url,
         audio_url=scene.audio_url
     )
-    
+    logger.info(f"[GENERATOR] Scene data: {scene_data}")
     # Update scene object with database data
     if scene_data:
-        # Ensure timestamps are ISO format strings
-        created_at = scene_data.get("created_at", datetime.now().isoformat())
-        updated_at = scene_data.get("updated_at", datetime.now().isoformat())
-        
         scene = Scene(
-            scene_id=scene_data.get("scene_id"),
-            title=f"Scene {index+1}",
-            description=f"Description for scene {index+1}",
-            text=scene.text,
-            image_prompt=scene.image_prompt,
-            image_url=scene_data.get("image_url"),
-            audio_url=scene_data.get("audio_url"),
-            created_at=created_at,
-            updated_at=updated_at
+            scene_id=scene_data['scene_id'],
+            title=scene_data['title'],
+            text=scene_data['text'],
+            image_prompt=scene_data['image_prompt'],
+            image_url=scene_data.get('image_url'),
+            audio_url=scene_data.get('audio_url'),
+            created_at=scene_data['created_at'],
+            updated_at=scene_data['updated_at']
         )
     
     logger.info(f"[GENERATOR] Scene {index+1} created successfully")
@@ -199,7 +198,6 @@ async def complete_story(db_client: StoryRepository, story_id: str, scenes: List
         scene_dict = {
             "scene_id": str(scene.scene_id),
             "title": scene.title,
-            "description": scene.description,
             "text": scene.text,
             "image_prompt": scene.image_prompt,
             "image_url": scene.image_url,

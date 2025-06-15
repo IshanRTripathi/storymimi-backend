@@ -53,7 +53,7 @@ class MockAIService:
         os.makedirs(MOCK_DATA_DIR / "text", exist_ok=True)
         os.makedirs(MOCK_DATA_DIR / "images", exist_ok=True)
 
-    async def generate_story(self, request: StoryRequest) -> Dict[str, Any]:
+    async def generate_story(self, request: StoryRequest, story_id: str) -> Dict[str, Any]:
         """Generate a mock story with scenes
         
         Args:
@@ -69,20 +69,21 @@ class MockAIService:
         # Generate mock scenes
         scenes = []
         num_scenes = getattr(request, "num_scenes", 3)
-        story_id = str(request.story_id) if hasattr(request, "story_id") else str(uuid.uuid4())
         prompt = getattr(request, "prompt", "default prompt")
         
-        now = datetime.utcnow()
+        now = datetime.now().isoformat()
         for i in range(num_scenes):  
             scene = {
                 "scene_id": str(uuid.uuid4()),
                 "story_id": story_id,
                 "sequence": i,
                 "text": f"Scene {i+1}: {prompt}",
+                "title": f"Scene {i+1}",
+                "image_prompt": f"An illustration for: {prompt}",
                 "image_url": f"https://example.com/image_{i}.png",
                 "audio_url": f"https://example.com/audio_{i}.mp3",
-                "created_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat()
+                "created_at": now,
+                "updated_at": now
             }
             scenes.append(scene)
         
@@ -91,12 +92,10 @@ class MockAIService:
         return {
             "story_id": story_id,
             "title": getattr(request, "title", "Mock Story"),
-            "status": "success",
+            "status": "COMPLETED",  # Using a valid status from StoryStatus enum
             "scenes": scenes,
             "user_id": str(request.user_id)
         }
-        
-        logger.debug(f"Mock data directories created at {MOCK_DATA_DIR}")
     
     async def generate_text(self, prompt: str) -> str:
         """Mock text generation that returns a sample text after a delay

@@ -36,12 +36,14 @@ class SceneRepository(SupabaseBaseClient):
         user_id_str = str(user_id) if user_id else None
         
         # Create scene data with timestamps
-        now = datetime.now(self.timezone)
+        now = datetime.now().isoformat()
         scene_data = {
             "scene_id": scene_id_str,
             "story_id": story_id_str,
             "sequence": sequence,
+            "title": title,
             "text": text,
+            "image_prompt": image_prompt,
             "image_url": image_url,
             "audio_url": audio_url,
             "created_at": now,

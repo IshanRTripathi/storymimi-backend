@@ -27,9 +27,14 @@ class JSONConverter:
         """
         try:
             return Scene(
-                sequence=data["sequence"],
+                scene_id=data["scene_id"],
+                title=data["title"],
                 text=data["text"],
-                image_prompt=data["image_prompt"]
+                image_prompt=data["image_prompt"],
+                image_url=data.get("image_url"),
+                audio_url=data.get("audio_url"),
+                created_at=datetime.fromisoformat(data["created_at"]),
+                updated_at=datetime.fromisoformat(data["updated_at"])
             )
         except KeyError as e:
             raise ValueError(f"Missing required field: {str(e)}")
@@ -75,15 +80,17 @@ class JSONConverter:
 
     @staticmethod
     def from_scene(scene: Scene) -> Dict[str, Any]:
-        """Convert Scene object to dictionary containing AI response data
-        
-        Args:
-            scene: Scene object
-            
-        Returns:
-            Dictionary representation of the scene
-        """
-        return scene.to_dict()
+        """Convert Scene object to dictionary containing AI response data"""
+        return {
+            "scene_id": str(scene.scene_id),
+            "title": scene.title,
+            "text": scene.text,
+            "image_prompt": scene.image_prompt,
+            "image_url": scene.image_url,
+            "audio_url": scene.audio_url,
+            "created_at": scene.created_at.isoformat() if scene.created_at else None,
+            "updated_at": scene.updated_at.isoformat() if scene.updated_at else None
+        }
 
     @staticmethod
     def from_story_response(response: Any) -> Dict[str, Any]:

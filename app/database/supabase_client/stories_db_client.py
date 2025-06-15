@@ -325,7 +325,9 @@ class StoryRepository(SupabaseBaseClient):
         self,
         story_id: str,
         sequence: int,
+        title: str,
         text: str,
+        image_prompt: str,
         image_url: str,
         audio_url: str,
     ) -> Optional[Dict[str, Any]]:
@@ -334,7 +336,9 @@ class StoryRepository(SupabaseBaseClient):
         Args:
             story_id: ID of the story
             sequence: Sequence number of the scene
+            title: Scene title
             text: Scene text content
+            image_prompt: Prompt for generating the scene's image
             image_url: URL of the scene's image
             audio_url: URL of the scene's audio
             created_at: Creation timestamp (can be datetime or ISO string)
@@ -359,7 +363,9 @@ class StoryRepository(SupabaseBaseClient):
             "scene_id": scene_id,
             "story_id": story_id_str,
             "sequence": sequence,
+            "title": title,
             "text": text,
+            "image_prompt": image_prompt,
             "image_url": image_url,
             "audio_url": audio_url,
             "created_at": now,

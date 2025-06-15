@@ -121,28 +121,27 @@ class Validator:
                     if not isinstance(scene, dict):
                         raise ValueError("Each scene must be a dictionary")
                     scene_dict = scene
-                
                 # Validate required scene fields
-                required_scene_fields = ["text", "image_url", "audio_url", "created_at", "updated_at"]
+                required_scene_fields = ["scene_id", "title", "text", "image_prompt", "image_url", "audio_url", "created_at", "updated_at"]
                 missing_scene_fields = [field for field in required_scene_fields if field not in scene_dict]
                 if missing_scene_fields:
                     raise ValueError(f"Scene is missing required fields: {', '.join(missing_scene_fields)}")
-                
-                    
                 # Validate field types
-                if not isinstance(scene["text"], str) or not scene["text"].strip():
+                if not isinstance(scene_dict["text"], str) or not scene_dict["text"].strip():
                     raise ValueError("Scene text must be a non-empty string")
-                    
-                if not isinstance(scene["image_url"], str):
-                    raise ValueError("Scene image_url must be a string")
-                    
-                if not isinstance(scene["audio_url"], str):
-                    raise ValueError("Scene audio_url must be a string")
-                    
+                if not isinstance(scene_dict["title"], str) or not scene_dict["title"].strip():
+                    raise ValueError("Scene title must be a non-empty string")
+                if not isinstance(scene_dict["image_prompt"], str) or not scene_dict["image_prompt"].strip():
+                    raise ValueError("Scene image_prompt must be a non-empty string")
+                # image_url and audio_url can be None or str
+                if scene_dict["image_url"] is not None and not isinstance(scene_dict["image_url"], str):
+                    raise ValueError("Scene image_url must be a string or None")
+                if scene_dict["audio_url"] is not None and not isinstance(scene_dict["audio_url"], str):
+                    raise ValueError("Scene audio_url must be a string or None")
                 # Validate scene timestamps
                 try:
-                    scene_created_at = datetime.fromisoformat(scene["created_at"])
-                    scene_updated_at = datetime.fromisoformat(scene["updated_at"])
+                    scene_created_at = datetime.fromisoformat(scene_dict["created_at"])
+                    scene_updated_at = datetime.fromisoformat(scene_dict["updated_at"])
                     if scene_created_at > scene_updated_at:
                         raise ValueError("Scene created_at cannot be after updated_at")
                 except ValueError:

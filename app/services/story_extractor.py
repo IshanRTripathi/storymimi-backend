@@ -2,6 +2,8 @@ from typing import Dict, List, Optional, Any
 import logging
 from app.models.story_types import StoryStatus, Scene
 from app.utils.json_converter import JSONConverter
+import uuid
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +50,14 @@ class StoryExtractor:
         for i in range(0, len(chunks), scene_size):
             scene_text = ' '.join(chunks[i:i + scene_size])
             scenes.append(Scene(
+                scene_id=uuid.uuid4(),
+                title=f"Scene {len(scenes)+1}",
                 text=scene_text,
-                image_prompt=f"An illustration for: {scene_text[:100]}..."
+                image_prompt=f"An illustration for: {scene_text[:100]}...",
+                image_url=None,
+                audio_url=None,
+                created_at=datetime.now(),
+                updated_at=datetime.now()
             ))
             
             # Stop if we have enough scenes

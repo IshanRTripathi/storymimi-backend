@@ -20,7 +20,7 @@ class AIServiceFactory:
             Either a real AIService or a MockAIService based on configuration
         """
         # Check if we should use mock services
-        use_mock = getattr(settings, "USE_MOCK_AI_SERVICES", False)
+        use_mock = getattr(settings, "use_mock_ai_service", False)
         
         if use_mock:
             # Return the mock implementation
