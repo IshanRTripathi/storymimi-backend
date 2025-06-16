@@ -33,45 +33,33 @@ async def generate_story_async(story_id: str, request: StoryRequest, user_id: st
         db_client = StoryRepository()
         storage_service = StorageService()
         
-        # Initialize story
-        story = await initialize_story(db_client, request, story_id, user_id)   
+        # Fetch story data once and pass it through
+        story_data = await initialize_story(db_client, story_id, user_id)
         
         # Generate AI content
         async with AIService() as ai_service:
             scenes = await generate_scenes(ai_service, request, story_id)
             await process_scenes(db_client, storage_service, ai_service, story_id, scenes)
-            
+        
         # Complete story
-        return await complete_story(db_client, story_id, scenes)
+        return await complete_story(db_client, story_data, scenes)
         
     except Exception as e:
         logger.exception(f"[GENERATOR] Error occurred for story_id={story_id}")
         return await handle_story_error(db_client, story_id, e)
 
-async def initialize_story(db_client: StoryRepository, request: StoryRequest, story_id: str, user_id: str) -> Dict[str, Any]:
-    """Initialize story in database and return story data."""
+async def initialize_story(db_client: StoryRepository, story_id: str, user_id: str) -> Dict[str, Any]:
+    """Update story status and fetch story data by story_id."""
     logger.info(f"[GENERATOR] Started generation for story_id={story_id}")
     
     # Update story status
     await db_client.update_story_status(story_id, StoryStatus.PROCESSING)
     
-    # Create story in database
-    created_story = await db_client.create_story(
-        title=request.title,
-        prompt=request.prompt,
-        user_id=user_id
-    )
-    
-    if not created_story["story_id"]:
-        raise ValueError("Failed to create story")
-    
     # Get story data
-    story_data = await db_client.get_story(created_story["story_id"])
+    story_data = await db_client.get_story(story_id)
     if not story_data:
-        raise ValueError(f"Story not found: {created_story['story_id']}")
-    
+        raise ValueError(f"Story not found: {story_id}")
     story_data["user_id"] = user_id
-    
     return story_data
 
 async def generate_scenes(ai_service: AIService, request: StoryRequest, story_id: str) -> List[Scene]:
@@ -173,19 +161,12 @@ async def create_and_update_scene(db_client: StoryRepository, story_id: str, ind
     
     logger.info(f"[GENERATOR] Scene {index+1} created successfully")
 
-async def complete_story(db_client: StoryRepository, story_id: str, scenes: List[Scene]) -> Dict[str, Any]:
+async def complete_story(db_client: StoryRepository, story_data: Dict[str, Any], scenes: List[Scene]) -> Dict[str, Any]:
     """Complete story generation and return final response."""
-    logger.info(f"[GENERATOR] Fetching updated story from database for story_id={story_id}")
-    
-    # Get updated story data
-    story_data = await db_client.get_story(story_id)
-    if not story_data:
-        raise ValueError(f"Story not found in database after completion: {story_id}")
+    logger.info(f"[GENERATOR] Completing story for story_id={story_data['story_id']}")
     
     # Update story status to completed
-    await db_client.update_story_status(story_id, StoryStatus.COMPLETED)
-    
-    logger.info(f"[GENERATOR] Story generated successfully for story_id={story_id}")
+    await db_client.update_story_status(story_data["story_id"], StoryStatus.COMPLETED)
     
     # Convert scenes to dictionaries before returning
     scene_dicts = []
