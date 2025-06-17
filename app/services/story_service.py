@@ -118,6 +118,7 @@ class StoryService:
                 user_id=story.get("user_id"),
                 created_at=story["created_at"],
                 updated_at=story.get("updated_at"),
+                story_metadata=story.get("story_metadata"),
                 scenes=scenes
             )
 

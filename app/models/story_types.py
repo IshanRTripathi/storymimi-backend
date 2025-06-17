@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from uuid import UUID
 from datetime import datetime
 from pydantic import BaseModel, Field
@@ -22,7 +22,7 @@ class Scene(BaseModel):
     scene_id: UUID = Field(description="Unique identifier for the scene")
     title: str = Field(description="Scene title", min_length=1, max_length=200)
     text: str = Field(description="Scene text", min_length=1, max_length=5000)
-    image_prompt: str = Field(description="Prompt for generating scene image", min_length=1, max_length=1000)
+    image_prompt: str = Field(description="Prompt for generating scene image", min_length=1, max_length=3000)
     image_url: Optional[str] = Field(
         None,
         description="URL of the scene image",
@@ -41,11 +41,10 @@ class Scene(BaseModel):
 
 class StoryRequest(BaseModel):
     """Request model for creating a story"""
-    title: str = Field(description="Title of the story")
+    title: str = Field(description="Title for the story")
     prompt: str = Field(description="Prompt for story generation")
     user_id: UUID = Field(description="User ID")
-    style: Optional[str] = Field(None, description="Story style")
-    num_scenes: Optional[int] = Field(5, description="Number of scenes")
+
 
 class StoryResponse(BaseModel):
     """Response model for story operations"""
@@ -72,3 +71,4 @@ class StoryDetail(BaseModel):
     user_id: UUID = Field(description="User ID")
     created_at: datetime = Field(description="Creation timestamp")
     updated_at: datetime = Field(description="Last update timestamp")
+    story_metadata: Optional[Dict[str, Any]] = Field(None, description="LLM-generated structured story metadata")

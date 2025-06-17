@@ -89,13 +89,110 @@ class MockAIService:
         
         logger.info(f"[MOCK] Generated {len(scenes)} scenes")
         
+        # Generate mock story metadata
+        story_metadata = {
+            "child_profile": {
+                "name": "Mock Child",
+                "age": 5,
+                "gender": "any",
+                "personality": ["curious", "friendly"],
+                "fears": ["none"],
+                "favorites": {
+                    "animal": "dog",
+                    "color": "blue",
+                    "toy": "ball"
+                },
+                "physical_appearance": {
+                    "height": "average",
+                    "build": "normal",
+                    "skin_tone": "any",
+                    "hair_style": "simple",
+                    "hair_length": "medium",
+                    "hair_color": "brown",
+                    "accessories": ["none"],
+                    "clothing": {
+                        "top": "t-shirt",
+                        "bottom": "pants",
+                        "shoes": "sneakers"
+                    }
+                }
+            },
+            "side_character": {
+                "exists": True,
+                "description": "A friendly companion"
+            },
+            "story_meta": {
+                "value_to_teach": "friendship",
+                "setting_description": "a magical world",
+                "scene_count": num_scenes,
+                "tone": "warm and friendly",
+                "story_title": getattr(request, "title", "Mock Story")
+            }
+        }
+        
         return {
             "story_id": story_id,
             "title": getattr(request, "title", "Mock Story"),
             "status": "COMPLETED",  # Using a valid status from StoryStatus enum
             "scenes": scenes,
-            "user_id": str(request.user_id)
+            "user_id": str(request.user_id),
+            "story_metadata": story_metadata,  # Add the story metadata
+            "created_at": now,
+            "updated_at": now
         }
+    
+    async def generate_structured_story(self, user_input: str) -> Dict[str, Any]:
+        """Mock structured story generation."""
+        logger.info(f"[MOCK] Generating structured story for input: {user_input[:50]}...")
+        await asyncio.sleep(self.delay_seconds)
+        return {
+            "child_profile": {
+                "name": "Lily",
+                "age": 5,
+                "gender": "female",
+                "personality": ["curious", "brave"],
+                "fears": ["darkness"],
+                "favorites": {"animal": "bunny", "color": "pink", "toy": "doll"},
+                "physical_appearance": {"height": "small", "build": "slender", "skin_tone": "fair", "hair_style": "braids", "hair_length": "long", "hair_color": "brown", "accessories": ["headband"], "clothing": {"top": "dress", "bottom": "leggings", "shoes": "sneakers"}}
+            },
+            "side_character": {
+                "exists": True,
+                "description": "A small, fluffy, blue bunny named Patches"
+            },
+            "story_meta": {
+                "value_to_teach": "kindness",
+                "setting_description": "a whimsical forest",
+                "scene_count": 3,
+                "tone": "warm and magical",
+                "story_title": f"The Magical Journey of Lily and {user_input.split()[0] if user_input else 'Friend'}"
+            },
+            "scenes": [
+                {"scene_number": 1, "text": "Lily, a curious girl, ventured into the Whispering Woods with her best friend, Patches the blue bunny."},
+                {"scene_number": 2, "text": "They discovered a hidden glade where glowing flowers bloomed, and a shy forest spirit greeted them."},
+                {"scene_number": 3, "text": "Lily and Patches shared their snacks with the spirit, learning the joy of giving, and returned home with a heart full of new friends."}
+            ]
+        }
+    
+    async def generate_visual_profile(self, child_profile: Dict[str, Any], side_char: Dict[str, Any]) -> Dict[str, str]:
+        """Mock visual profile generation."""
+        logger.info(f"[MOCK] Generating visual profile for child: {child_profile.get('name')}, side_char: {side_char.get('description')}")
+        await asyncio.sleep(self.delay_seconds)
+        return {
+            "character_prompt": f"A {child_profile.get('age','young')} year old {child_profile.get('gender','child')} named {child_profile.get('name','')} with {child_profile.get('physical_appearance',{}).get('hair_color','')} {child_profile.get('physical_appearance',{}).get('hair_length','')} hair and {child_profile.get('physical_appearance',{}).get('hair_style','')}, wearing a {child_profile.get('physical_appearance',{}).get('clothing',{}).get('top','')} and {child_profile.get('physical_appearance',{}).get('clothing',{}).get('bottom','')}.",
+            "side_character_prompt": f"A {side_char.get('description','')}."
+        }
+    
+    async def generate_base_style(self, setting: str, tone: str) -> str:
+        """Mock base style generation."""
+        logger.info(f"[MOCK] Generating base style for setting: {setting}, tone: {tone}")
+        await asyncio.sleep(self.delay_seconds)
+        return f"A vibrant, whimsical watercolor painting with soft, magical lighting and a pastel color palette, in the style of a classic children\'s book illustration."
+
+    async def generate_scene_moment(self, scene_text: str) -> str:
+        """Mock scene moment generation."""
+        logger.info(f"[MOCK] Generating scene moment for text: {scene_text[:50]}...")
+        await asyncio.sleep(self.delay_seconds)
+        return f"A {scene_text[:50]}... with emphasis on action and emotion."
     
     async def generate_text(self, prompt: str) -> str:
         """Mock text generation that returns a sample text after a delay
@@ -196,46 +293,58 @@ class MockAIService:
         image_file = random.choice(image_files)
         logger.debug(f"Selected random image file: {image_file.name}")
         
-        with open(image_file, "rb") as f:
-            content = f.read()
-            logger.debug(f"Successfully read image file with size: {len(content)} bytes")
-            return content
+        try:
+            with open(image_file, "rb") as f:
+                content = f.read()
+                if not content or len(content) < 100:
+                    logger.error(f"Invalid image file {image_file}: too small or empty")
+                    raise ValueError("Invalid image data")
+                logger.debug(f"Successfully read image file with size: {len(content)} bytes")
+                return content
+        except Exception as e:
+            logger.error(f"Failed to read image file {image_file}: {str(e)}")
+            raise
     
     async def generate_audio(self, text: str, voice_id: str = "21m00Tcm4TlvDq8ikWAM") -> bytes:
         """Mock audio generation that returns a sample audio file after a delay
         
         Args:
-            text: The text to convert to speech (ignored in mock)
-            voice_id: The voice ID to use (ignored in mock)
+            text: The text to convert to speech
+            voice_id: The voice ID to use
             
         Returns:
             Sample audio bytes from the mock data directory
+            
+        Raises:
+            ValueError: If audio generation fails
         """
-        logger.debug(f"Mock generating audio for text of length: {len(text)}, voice_id: {voice_id}")
+        logger.info(f"[MOCK] Generating audio with V3 simulation for text length: {len(text)}")
+        logger.debug(f"[MOCK] Using voice_id: {voice_id}")
         
         # Simulate processing delay
-        logger.debug(f"Simulating processing delay of {self.delay_seconds} seconds")
         await asyncio.sleep(self.delay_seconds)
         
         # Get a list of all audio files in the mock data directory
-        audio_files = list((MOCK_DATA_DIR / "audio").glob("*.mp3")) + \
-                     list((MOCK_DATA_DIR / "audio").glob("*.wav"))
-        logger.debug(f"Found {len(audio_files)} sample audio files in mock data directory")
+        audio_files = list((MOCK_DATA_DIR / "audio").glob("*.mp3"))
         
-        # If no audio files exist, return a simple audio file
         if not audio_files:
-            logger.debug("No sample audio files found, returning default empty MP3")
-            # Return a simple empty MP3 file (not actually playable)
-            default_audio = bytes.fromhex(
-                "494433030000000000545432000000000054414c42000000000000"
-            )
-            return default_audio
+            logger.error("[MOCK] No sample audio files found")
+            raise ValueError("No sample audio files available")
         
         # Choose a random audio file and read its contents
         audio_file = random.choice(audio_files)
-        logger.debug(f"Selected random audio file: {audio_file.name}")
+        logger.debug(f"[MOCK] Selected audio file: {audio_file.name}")
         
-        with open(audio_file, "rb") as f:
-            content = f.read()
-            logger.debug(f"Successfully read audio file with size: {len(content)} bytes")
-            return content
+        try:
+            with open(audio_file, "rb") as f:
+                content = f.read()
+                if not content or len(content) < 100:
+                    logger.error(f"[MOCK] Invalid audio file {audio_file}: too small or empty")
+                    raise ValueError("Invalid audio data")
+                    
+                logger.info(f"[MOCK] Successfully read audio file, size: {len(content)} bytes")
+                return content
+                
+        except Exception as e:
+            logger.error(f"[MOCK] Failed to read audio file {audio_file}: {str(e)}")
+            raise ValueError(f"Failed to read audio file: {str(e)}")

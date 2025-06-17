@@ -134,7 +134,8 @@ class JSONConverter:
             "scenes": detail.scenes,
             "user_id": str(detail.user_id),
             "created_at": detail.created_at.isoformat(),
-            "updated_at": detail.updated_at.isoformat()
+            "updated_at": detail.updated_at.isoformat(),
+            "story_metadata": detail.story_metadata
         }
 
     @staticmethod
@@ -158,7 +159,8 @@ class JSONConverter:
             scenes=data["scenes"],
             user_id=data["user_id"],
             created_at=datetime.fromisoformat(data["created_at"]),
-            updated_at=datetime.fromisoformat(data["updated_at"])
+            updated_at=datetime.fromisoformat(data["updated_at"]),
+            story_metadata=data.get("story_metadata")
         )
 
     @staticmethod

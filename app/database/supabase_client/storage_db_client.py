@@ -7,6 +7,7 @@ from pathlib import Path
 from app.database.supabase_client.base_db_client import SupabaseBaseClient
 import logging
 import time
+from supabase import create_client, Client
 
 logger = logging.getLogger(__name__)
 
@@ -19,17 +20,64 @@ class StorageApiError(StorageError):
     pass
 
 class StorageService(SupabaseBaseClient):
-    """Service for Supabase Storage operations"""
+    """Service for handling file storage operations in Supabase"""
     
     DEFAULT_CACHE_CONTROL = "max-age=31536000"  # 1 year
     AUDIO_BUCKET = "audio"
     IMAGE_BUCKET = "images"
     
-    def __init__(self):
-        """Initialize storage service with proper client"""
+    def __init__(self, supabase_url: Optional[str] = None, supabase_key: Optional[str] = None):
+        """Initialize the storage service with Supabase credentials."""
+        from app.config import settings
+        self.supabase_url = supabase_url or settings.SUPABASE_URL
+        self.supabase_key = supabase_key or settings.SUPABASE_KEY
+        self.client = create_client(self.supabase_url, self.supabase_key)
+        self.max_retries = 3
+        self.timeout = 100
         super().__init__()
-        logger.info("Storage service initialized")
-    
+        self._cache = {}  # Simple in-memory cache
+        self._cache_ttl = 3600  # Cache TTL in seconds
+        self._last_cleanup = time.time()
+        
+    def _get_cache_key(self, bucket: str, file_path: str) -> str:
+        """Generate a cache key for a file"""
+        return f"{bucket}:{file_path}"
+        
+    def _get_from_cache(self, bucket: str, file_path: str) -> Optional[str]:
+        """Get a URL from cache if it exists and is not expired"""
+        key = self._get_cache_key(bucket, file_path)
+        if key in self._cache:
+            url, timestamp = self._cache[key]
+            if time.time() - timestamp < self._cache_ttl:
+                logger.debug(f"Cache hit for {key}")
+                return url
+            else:
+                logger.debug(f"Cache expired for {key}")
+                del self._cache[key]
+        return None
+        
+    def _add_to_cache(self, bucket: str, file_path: str, url: str):
+        """Add a URL to cache"""
+        key = self._get_cache_key(bucket, file_path)
+        self._cache[key] = (url, time.time())
+        logger.debug(f"Added to cache: {key}")
+        
+        # Cleanup old cache entries periodically
+        if time.time() - self._last_cleanup > 3600:  # Cleanup every hour
+            self._cleanup_cache()
+            
+    def _cleanup_cache(self):
+        """Remove expired cache entries"""
+        now = time.time()
+        expired_keys = [
+            key for key, (_, timestamp) in self._cache.items()
+            if now - timestamp > self._cache_ttl
+        ]
+        for key in expired_keys:
+            del self._cache[key]
+        self._last_cleanup = now
+        logger.debug(f"Cleaned up {len(expired_keys)} expired cache entries")
+
     def _ensure_bucket_exists(self, bucket_name: str, public: bool = True) -> None:
         """Ensure a storage bucket exists, creating it if necessary
         
@@ -77,101 +125,53 @@ class StorageService(SupabaseBaseClient):
             logger.error(f"Failed to ensure bucket {bucket_name} exists: {str(e)}")
             raise StorageError(f"Failed to ensure bucket {bucket_name} exists") from e
 
-    def upload_image(self, story_id: str, scene_index: int, image_bytes: bytes) -> str:
-        """Upload an image to Supabase Storage and return the public URL
+    async def upload_image(self, story_id: str, scene_num: int, image_bytes: bytes) -> str:
+        """Upload an image to Supabase Storage and return its public URL."""
+        file_path = f"{story_id}/scene_{scene_num}.png"
+        backoff = 1
         
-        Args:
-            story_id: The ID of the story
-            scene_index: The index of the scene
-            image_bytes: The image bytes to upload
-            
-        Returns:
-            str: The public URL of the uploaded image
-            
-        Raises:
-            StorageError: If the upload fails
-        """
-        try:
-            # Generate unique filename
-            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-            filename = f"story_{story_id}_scene_{scene_index}_{timestamp}.png"
-            
-            # Upload file
-            file_path = f"stories/{story_id}/{filename}"
-            self._ensure_bucket_exists(self.IMAGE_BUCKET)
-            
-            # Ensure image_bytes is in bytes format
-            if isinstance(image_bytes, str):
-                image_bytes = image_bytes.encode()
-            
-            # Upload the file
-            result = self.storage.from_(self.IMAGE_BUCKET).upload(
-                file_path,
-                image_bytes,
-                {
-                    'Content-Type': 'image/png',
-                    'Cache-Control': self.DEFAULT_CACHE_CONTROL
-                }
-            )
-            
-            # Get public URL
-            url = self.storage.from_(self.IMAGE_BUCKET).get_public_url(file_path)
-            logger.info(f"Image uploaded successfully: {url}")
-            return url
-            
-        except Exception as e:
-            logger.error(f"Failed to upload image: {str(e)}")
-            raise StorageError(f"Failed to upload image: {str(e)}") from e
-    
-    def upload_audio(self, story_id: str, scene_index: int, audio_bytes: bytes) -> str:
-        """
-        Upload an audio file to Supabase Storage and return the public URL
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                logger.info(f"[📤 Upload Attempt {attempt}] Uploading image for scene {scene_num}...")
+                self.client.storage.from_(self.IMAGE_BUCKET).upload(
+                    file_path,
+                    image_bytes,
+                    {"content-type": "image/png"}
+                )
+                public_url = self.client.storage.from_(self.IMAGE_BUCKET).get_public_url(file_path)
+                logger.info(f"[✅ Upload success] Image uploaded for scene {scene_num}")
+                return public_url
+            except Exception as e:
+                logger.warning(f"[Upload Retry {attempt}] {e}, retrying in {backoff}s...")
+                if attempt == self.max_retries:
+                    logger.error(f"[Upload Failed] Failed after {self.max_retries} retries: {str(e)}")
+                    raise RuntimeError(f"Image upload failed after {self.max_retries} retries: {str(e)}")
+                time.sleep(backoff)
+                backoff *= 2
+
+    async def upload_audio(self, story_id: str, scene_num: int, audio_bytes: bytes) -> str:
+        """Upload an audio file to Supabase Storage and return its public URL."""
+        file_path = f"{story_id}/scene_{scene_num}.mp3"
+        backoff = 1
         
-        Args:
-            story_id: The ID of the story
-            scene_index: The index of the scene
-            audio_bytes: The audio data as bytes
-            
-        Returns:
-            str: The public URL of the uploaded audio
-            
-        Raises:
-            StorageError: If upload fails
-        """
-        start_time = time.time()
-        try:
-            # Create unique filename with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"story_{story_id}_scene_{scene_index}_{timestamp}.mp3"
-            
-            # Upload file
-            # Use forward slashes for Supabase paths
-            file_path = f"audio/{story_id}/{filename}"
-            self._ensure_bucket_exists(self.AUDIO_BUCKET)
-            
-            # Upload the file
-            result = self.storage.from_(self.AUDIO_BUCKET).upload(
-                file_path,
-                audio_bytes,
-                {
-                    'Content-Type': 'audio/mpeg',
-                    'Cache-Control': self.DEFAULT_CACHE_CONTROL
-                }
-            )
-            
-            if not result:
-                raise StorageError("Upload failed: No result returned")
-                
-            # Get public URL
-            url = self.storage.from_(self.AUDIO_BUCKET).get_public_url(str(file_path))
-            
-            logger.info(f"Audio uploaded successfully: {url}")
-            return url
-            
-        except Exception as e:
-            elapsed = time.time() - start_time
-            logger.error(f"Failed to upload audio in {elapsed:.2f}s: {str(e)}", exc_info=True)
-            raise StorageError(f"Failed to upload audio: {str(e)}") from e
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                logger.info(f"[📤 Upload Attempt {attempt}] Uploading audio for scene {scene_num}...")
+                self.client.storage.from_(self.AUDIO_BUCKET).upload(
+                    file_path,
+                    audio_bytes,
+                    {"content-type": "audio/mpeg"}
+                )
+                public_url = self.client.storage.from_(self.AUDIO_BUCKET).get_public_url(file_path)
+                logger.info(f"[✅ Upload success] Audio uploaded for scene {scene_num}")
+                return public_url
+            except Exception as e:
+                logger.warning(f"[Upload Retry {attempt}] {e}, retrying in {backoff}s...")
+                if attempt == self.max_retries:
+                    logger.error(f"[Upload Failed] Failed after {self.max_retries} retries: {str(e)}")
+                    raise RuntimeError(f"Audio upload failed after {self.max_retries} retries: {str(e)}")
+                time.sleep(backoff)
+                backoff *= 2
     
     def delete_file(self, bucket_name: str, file_path: str) -> bool:
         """Delete a file from Supabase Storage
@@ -192,40 +192,6 @@ class StorageService(SupabaseBaseClient):
         except Exception as e:
             logger.error(f"Failed to delete file {file_path} from bucket {bucket_name}: {str(e)}")
             raise StorageError(f"Failed to delete file: {str(e)}") from e
-        """Delete a file from Supabase Storage
-        
-        Args:
-            bucket_name: The name of the bucket
-            file_path: The path to the file within the bucket
-            
-        Returns:
-            True if deletion was successful, False otherwise
-            
-        Raises:
-            Exception: If file deletion fails
-        """
-        start_time = time.time()
-        
-        logger.info(f"Deleting file from {bucket_name}: {file_path}")
-        
-        try:
-            # Check if the bucket exists
-            try:
-                self.storage.get_bucket(bucket_name)
-            except Exception:
-                logger.warning(f"Bucket does not exist: {bucket_name}")
-                return False
-                
-            # Delete the file
-            self.storage.from_(bucket_name).remove([file_path])
-            
-            elapsed = time.time() - start_time
-            logger.info(f"File deleted successfully in {elapsed:.2f}s: {bucket_name}/{file_path}")
-            return True
-        except Exception as e:
-            elapsed = time.time() - start_time
-            logger.error(f"Failed to delete file in {elapsed:.2f}s: {str(e)}", exc_info=True)
-            return False
     
     async def delete_story_files(self, story_id: Union[str, uuid]) -> Tuple[int, int]:
         """Delete all files associated with a story

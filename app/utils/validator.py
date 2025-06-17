@@ -43,6 +43,9 @@ class Validator:
         Raises:
             ValueError: If validation fails
         """
+        logger.info(f"[VALIDATOR] Starting model data validation. is_initial_creation={is_initial_creation}, is_completion={is_completion}")
+        logger.debug(f"[VALIDATOR] Data to validate: {data}")
+        
         # For initial story creation, only require basic fields
         required_fields = ["story_id", "title", "status"]
         
@@ -50,6 +53,11 @@ class Validator:
             # For completion validation, scenes are optional in error cases
             if data.get("status") != "failed":
                 required_fields.extend(["scenes"])
+            
+            # Add story_metadata to required fields for non-initial creation if it's expected
+            # Based on the user's input, it's created once and then referred by other flows.
+            # So, if not initial creation, it should be present.
+            required_fields.extend(["story_metadata"])
             
             # Always require timestamps for non-initial creation
             required_fields.extend(["created_at", "updated_at"])
@@ -62,11 +70,17 @@ class Validator:
             if data.get("status") == "failed" and "error" in data:
                 required_fields.extend(["error"])
             
+        logger.info(f"[VALIDATOR] Required fields for validation: {required_fields}")
+        
         # Check for missing required fields
         missing_fields = [field for field in required_fields if field not in data]
         if missing_fields:
+            logger.error(f"[VALIDATOR] Missing required fields: {missing_fields}")
+            logger.error(f"[VALIDATOR] Available fields in data: {list(data.keys())}")
             raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
             
+        logger.info("[VALIDATOR] All required fields present, proceeding with type validation")
+        
         # Validate field types
         if not isinstance(data["story_id"], str):
             raise ValueError("Story ID must be a string")
@@ -105,6 +119,13 @@ class Validator:
         # Validate title
         if not isinstance(data["title"], str) or not data["title"].strip():
             raise ValueError("Title must be a non-empty string")
+        
+        # Validate story_metadata if present and not initial creation
+        if not is_initial_creation and "story_metadata" in data:
+            if not isinstance(data["story_metadata"], dict):
+                raise ValueError("Story metadata must be a dictionary.")
+            # Further detailed validation of story_metadata can be added here if its internal structure is strictly defined.
+            # For now, we'll assume the LLM output is mostly trusted or validated at the prompt service level.
         
         # Validate scenes if present
         if "scenes" in data:

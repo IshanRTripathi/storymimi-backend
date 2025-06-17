@@ -31,7 +31,8 @@ CREATE TABLE stories (
     status TEXT NOT NULL,
     user_id UUID REFERENCES users(user_id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ
+    updated_at TIMESTAMPTZ,
+    story_metadata JSONB -- New column for LLM structured data
 );
 
 -- Create scenes table

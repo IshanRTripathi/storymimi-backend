@@ -26,7 +26,9 @@ async def init_database():
             status TEXT NOT NULL,
             user_id UUID REFERENCES users(user_id),
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            updated_at TIMESTAMP WITH TIME ZONE
+            updated_at TIMESTAMP WITH TIME ZONE,
+            story_metadata JSONB,
+            source TEXT
         );
 
         -- Create scenes table
@@ -34,10 +36,13 @@ async def init_database():
             scene_id UUID PRIMARY KEY,
             story_id UUID REFERENCES stories(story_id),
             sequence INTEGER NOT NULL,
+            title TEXT NOT NULL,
             text TEXT NOT NULL,
+            image_prompt TEXT NOT NULL,
             image_url TEXT,
             audio_url TEXT,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
         """
         

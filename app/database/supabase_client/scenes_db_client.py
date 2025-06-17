@@ -1,7 +1,7 @@
 from typing import Dict, Optional, Any, Union, List
 from uuid import UUID
 from datetime import datetime
-
+from app.models.story_types import Scene
 from app.database.supabase_client.base_db_client import SupabaseBaseClient
 import logging
 import time
@@ -12,13 +12,15 @@ logger = logging.getLogger(__name__)
 class SceneRepository(SupabaseBaseClient):
     """Repository for scene-related operations"""
     
-    async def create_scene(self, story_id: Union[str, UUID], sequence: int, text: str, image_url: str, audio_url: str, user_id: Optional[UUID] = None) -> Optional[Dict[str, Any]]:
+    async def create_scene(self, scene: Scene, user_id: Optional[UUID] = None) -> Optional[Dict[str, Any]]:
         """Create a new scene for a story with audit trail
         
         Args:
             story_id: The ID of the story
             sequence: The sequence number of the scene
+            title: The title of the scene
             text: The text content of the scene
+            image_prompt: The prompt used to generate the scene image
             image_url: URL to the scene's image
             audio_url: URL to the scene's audio
             user_id: Optional ID of user creating the scene
@@ -30,9 +32,8 @@ class SceneRepository(SupabaseBaseClient):
             Exception: If scene creation fails
         """
         start_time = time.time()
-        scene_id = uuid.uuid4()
-        scene_id_str = str(scene_id)
-        story_id_str = str(story_id)
+        scene_id_str = str(scene.scene_id)
+        story_id_str = str(scene.story_id)
         user_id_str = str(user_id) if user_id else None
         
         # Create scene data with timestamps
@@ -40,12 +41,12 @@ class SceneRepository(SupabaseBaseClient):
         scene_data = {
             "scene_id": scene_id_str,
             "story_id": story_id_str,
-            "sequence": sequence,
-            "title": title,
-            "text": text,
-            "image_prompt": image_prompt,
-            "image_url": image_url,
-            "audio_url": audio_url,
+            "sequence": scene.sequence,
+            "title": scene.title,
+            "text": scene.text,
+            "image_prompt": scene.image_prompt,
+            "image_url": scene.image_url,
+            "audio_url": scene.audio_url,
             "created_at": now,
             "updated_at": now
         }

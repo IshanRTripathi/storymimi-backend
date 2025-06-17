@@ -1,131 +1,209 @@
 # StoryMimi Backend
 
-A FastAPI backend application for the StoryMimi project. This backend handles user requests for story generation, orchestrates calls to various AI services (text, image, audio), manages story data in Supabase, and processes long-running tasks asynchronously using Celery and Redis.
+A robust FastAPI backend for the StoryMimi project, orchestrating story generation with LLMs, image, and audio models, and handling asynchronous workflows with Celery and Redis. This document provides a deep-dive into the backend structure, event flows, and integration points for AI services.
 
-## Core Technologies
+---
 
-- **Web Framework:** FastAPI
-- **Database & Storage:** Supabase (PostgreSQL and Storage)
-- **Asynchronous Task Queue:** Celery with Redis as broker and backend
-- **Text Generation LLM:** Qwen-2.5-7B-Instruct (via OpenRouter.ai API)
-- **Image Generation:** FLUX.1-schnell (via Together.ai API)
-- **Audio Generation:** ElevenLabs API
-- **HTTP Client:** `httpx` for asynchronous API calls
-- **Data Validation:** Pydantic
+## Table of Contents
+- [Architecture Overview](#architecture-overview)
+- [Project Structure](#project-structure)
+- [API Design](#api-design)
+- [Data Models](#data-models)
+- [Event Flows](#event-flows)
+  - [Normal (Synchronous) Flow](#normal-synchronous-flow)
+  - [Celery (Asynchronous) Workflow](#celery-asynchronous-workflow)
+- [Integration with LLM, Image, and Audio Models](#integration-with-llm-image-and-audio-models)
+- [Celery Workflow: Best Practices & Issues](#celery-workflow-best-practices--issues)
+- [Configuration & Environment](#configuration--environment)
+- [Mocking & Local Development](#mocking--local-development)
+- [References](#references)
 
-## Setup Instructions
+---
 
-1. Create a virtual environment:
-```bash
-python -m venv venv
-```
+## Architecture Overview
 
-2. Activate the virtual environment:
-- On Windows:
-```bash
-venv\Scripts\activate
-```
-- On macOS/Linux:
-```bash
-source venv/bin/activate
-```
+- **Framework:** FastAPI (async, OpenAPI/Swagger support)
+- **Database:** Supabase (PostgreSQL + Storage)
+- **Async Task Queue:** Celery (with Redis broker/backend)
+- **AI Services:**
+  - LLM: Qwen-2.5-7B-Instruct (OpenRouter.ai)
+  - Image: FLUX.1-schnell (Together.ai)
+  - Audio: ElevenLabs
+- **HTTP Client:** httpx (async)
+- **Validation:** Pydantic
 
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-4. Create a `.env` file based on the `.env.example` file and fill in your API keys and configuration.
-
-## Running the Application
-
-### Option 1: Using the startup script (with Redis)
-
-This option requires Redis to be installed on your system. The script will start Redis, the FastAPI server, and the Celery worker:
-
-```bash
-python start_all.py
-```
-
-### Option 2: Using Docker for Redis
-
-```bash
-# Start Redis using Docker Compose
-docker-compose up -d
-
-# Run the FastAPI application
-uvicorn app.main:app --reload
-
-# In a separate terminal, start the Celery worker
-celery -A app.workers.celery_app worker --loglevel=info
-```
-
-### Option 3: Without Redis and Celery (simplified mode)
-
-This option runs only the FastAPI server without background processing. All operations will be performed synchronously:
-
-```bash
-python start_without_redis.py
-```
-
-## Mock Services
-
-The application includes mock implementations of the AI services to avoid using real API credits during development. To use the mock services:
-
-1. Set `USE_MOCK_AI_SERVICES=True` in your `.env` file (this is the default)
-2. Adjust the mock delay with `MOCK_DELAY_SECONDS=5.0` if needed
-
-The mock services return sample data from the `app/mocks/data` directory:
-- Text: Sample story texts
-- Images: Sample image files
-- Audio: Sample audio files
-
-## API Documentation
-
-Once the application is running, you can access the API documentation at:
-
-- Swagger UI: http://localhost:8080/docs
-- ReDoc: http://localhost:8080/redoc
+---
 
 ## Project Structure
 
 ```
 storymimi-backend/
 ├── app/
-│   ├── init.py
-│   ├── main.py              # Main FastAPI application entry point
-│   ├── config.py            # Pydantic BaseSettings for configuration
-│   ├── api/                 # FastAPI routers for API endpoints
-│   │   ├── init.py
-│   │   ├── stories.py       # Endpoints for story generation, status, retrieval
-│   │   └── users.py         # Basic user-related endpoints (e.g., get user stories)
-│   ├── mocks/               # Mock implementations of AI services
-│   │   ├── init.py
-│   │   ├── mock_ai_service.py # Mock implementation of AI service
-│   │   └── data/            # Sample data for mock services
-│   │       ├── text/        # Sample story texts
-│   │       ├── images/      # Sample image files
-│   │       └── audio/       # Sample audio files
-│   ├── services/            # Business logic and AI/DB interactions
-│   │   ├── init.py
-│   │   ├── ai_service.py    # Handles all AI API calls (OpenRouter, Together, ElevenLabs)
-│   │   ├── ai_service_mock_adapter.py # Factory for switching between real and mock AI services
-│   │   └── story_service.py # Orchestrates story creation, calls AI/DB services
-│   ├── workers/             # Celery worker definitions
-│   │   ├── init.py
-│   │   ├── celery_app.py    # Celery application instance and configuration
-│   │   └── story_worker.py  # Celery tasks for background story generation
-│   ├── database/            # Database client and utilities
-│   │   ├── init.py
-│   │   └── supabase_client.py # Supabase client for DB and Storage operations
-│   └── models/              # Pydantic models for data structures (requests, responses, DB models)
-│       ├── init.py
-│       ├── story.py         # Models for Story, Scene, StoryRequest, StoryResponse, etc.
-│       └── user.py          # Models for User
-├── requirements.txt         # Python dependencies
-├── .env.example            # Example environment variables file
-├── docker-compose.yml      # Docker Compose for local Redis setup
-├── start_all.py            # Script to start all services (Redis, FastAPI, Celery)
-├── start_without_redis.py  # Script to start only the FastAPI server
-└── README.md               # Project README
+│   ├── main.py                # FastAPI app entry point
+│   ├── config.py              # Settings (env, API keys, etc.)
+│   ├── api/                   # API routers (stories, users)
+│   ├── services/              # Business logic, AI, story orchestration
+│   ├── tasks/                 # Celery tasks (background jobs)
+│   ├── core/                  # Celery app/config
+│   ├── database/              # Supabase DB clients (stories, scenes, users)
+│   ├── models/                # Pydantic models (Story, Scene, etc.)
+│   ├── utils/                 # Validation, JSON conversion, helpers
+│   ├── mocks/                 # Mock AI services for dev/testing
+│   └── ...
+├── static/                    # Static files (for Swagger UI, etc.)
+├── docs/                      # Architecture and workflow docs
+├── requirements.txt           # Python dependencies
+├── docker-compose.yml         # For local Redis
+├── start_all.py               # Script: start API, Celery, Redis
+├── start_without_redis.py     # Script: run API only (sync mode)
+└── README.md                  # This file
 ```
+
+---
+
+## API Design
+
+- **Swagger UI:** `/docs` (auto-generated)
+- **Key Endpoints:**
+  - `POST /stories/` — Create a new story (async, triggers Celery)
+  - `GET /stories/{story_id}` — Get full story details (with scenes)
+  - `GET /stories/{story_id}/status` — Poll story generation status
+  - `GET /stories/search/` — Search stories
+  - `GET /stories/recent/` — Recent stories
+  - `DELETE /stories/{story_id}` — Delete a story
+  - `POST /users/` — Create user
+  - `GET /users/{user_id}` — Get user info
+  - `GET /users/{user_id}/stories` — Get all stories for a user
+
+---
+
+## Data Models
+
+### Story
+- `story_id: UUID`
+- `title: str`
+- `prompt: str`
+- `status: str` (`pending`, `processing`, `completed`, `failed`)
+- `user_id: UUID`
+- `created_at: datetime`
+- `updated_at: datetime`
+
+### Scene
+- `scene_id: UUID`
+- `title: str`
+- `text: str`
+- `image_prompt: str`
+- `image_url: Optional[str]`
+- `audio_url: Optional[str]`
+- `created_at: datetime`
+- `updated_at: datetime`
+
+### StoryRequest
+- `title: str`
+- `prompt: str`
+- `user_id: UUID`
+- `style: Optional[str]`
+- `num_scenes: Optional[int]`
+
+---
+
+## Event Flows
+
+### Normal (Synchronous) Flow
+- Used only in dev mode (`start_without_redis.py`).
+- API call triggers story generation and all AI calls synchronously in the request thread.
+- Not recommended for production (blocks API worker).
+
+### Celery (Asynchronous) Workflow
+- **1. API Call:** `POST /stories/` creates a DB record (status: `pending`), then dispatches a Celery task with the story ID and request data.
+- **2. Celery Worker:**
+  - Picks up the task (`generate_story_task`), creates an event loop, and runs the async story generation pipeline.
+  - **Pipeline:**
+    - Updates story status to `processing`.
+    - Calls LLM for story text and scene breakdown.
+    - For each scene:
+      - Calls image model for illustration, uploads to storage.
+      - Calls audio model for narration, uploads to storage.
+      - Persists scene in DB.
+    - Updates story status to `completed` (or `failed` on error).
+- **3. API Polling:** Client polls `/stories/{story_id}/status` until `completed` or `failed`.
+- **4. Retrieval:** Client fetches full story and scenes via `/stories/{story_id}`.
+
+#### Celery Task Example
+```python
+@celery_app.task(bind=True, name="story_task.generate")
+def generate_story_task(self, story_id, request_dict, user_id):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    request = StoryRequest(**request_dict)
+    result = loop.run_until_complete(generate_story_async(story_id, request, user_id))
+    # ...
+```
+
+---
+
+## Integration with LLM, Image, and Audio Models
+
+- **LLM (Text):**
+  - Qwen-2.5-7B-Instruct via OpenRouter.ai
+  - Prompt built in `story_generator.py`, sent via `httpx` async client
+  - Returns story title and scenes (JSON)
+- **Image Generation:**
+  - FLUX.1-schnell via Together.ai
+  - Each scene's `image_prompt` sent to Together.ai, returns base64 image, uploaded to storage
+- **Audio Generation:**
+  - ElevenLabs API
+  - Each scene's `text` sent for TTS, returns audio bytes, uploaded to storage
+- **Mocking:**
+  - Set `USE_MOCK_AI_SERVICES=True` in `.env` to use local mocks (no API credits needed)
+
+---
+
+## Celery Workflow: Best Practices & Issues
+
+- **Async Event Loop:**
+  - Each task creates its own event loop (`asyncio.new_event_loop()`), runs async code, and closes the loop.
+  - See [Celery Issue #3884](https://github.com/celery/celery/issues/3884) and [Discussion #9058](https://github.com/celery/celery/discussions/9058) for best practices and pitfalls.
+- **Idempotency:**
+  - Tasks update DB status and are safe to retry.
+- **Resource Management:**
+  - `worker_max_tasks_per_child` set to 200 to avoid memory leaks.
+- **Error Handling:**
+  - All exceptions are logged, DB status is updated, and event loops are closed in `finally` blocks.
+- **Broker Reliability:**
+  - Redis is used for dev; consider RabbitMQ for production if data loss is unacceptable.
+- **See:** [`docs/celery_workflow_analysis.md`](docs/celery_workflow_analysis.md) for a full analysis and mitigation strategies.
+
+---
+
+## Configuration & Environment
+
+- All config is managed via `.env` and `app/config.py` (Pydantic `BaseSettings`).
+- **Key Variables:**
+  - `SUPABASE_URL`, `SUPABASE_KEY`
+  - `REDIS_URL`
+  - `OPENROUTER_API_KEY`, `TOGETHER_API_KEY`, `ELEVENLABS_API_KEY`
+  - `USE_MOCK_AI_SERVICES`, `MOCK_DELAY_SECONDS`
+
+---
+
+## Mocking & Local Development
+
+- **Mock AI Services:**
+  - Use `USE_MOCK_AI_SERVICES=True` to avoid real API calls.
+  - Mocks return sample data from `app/mocks/data/`.
+- **Testing:**
+  - Use the provided Postman collection or Swagger UI for API testing.
+  - See `TESTING_GUIDE.md` for more.
+
+---
+
+## References
+- [Celery Official Docs](https://docs.celeryproject.org/en/stable/)
+- [Celery Async Best Practices](https://github.com/celery/celery/discussions/9058)
+- [FastAPI Docs](https://fastapi.tiangolo.com/)
+- [OpenRouter.ai API](https://openrouter.ai/docs)
+- [Together.ai API](https://docs.together.ai/docs)
+- [ElevenLabs API](https://docs.elevenlabs.io/)
+- [Supabase Docs](https://supabase.com/docs)
+- [Celery Workflow Analysis](docs/celery_workflow_analysis.md)
