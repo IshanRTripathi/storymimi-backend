@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 from uuid import UUID, uuid4
 
-from app.database.supabase_client import StoryRepository, StorageService
+from app.database.supabase_client import StoryRepository, SceneRepository, StorageService
 from app.models.story_types import StoryStatus, StoryRequest, StoryResponse, Scene, StoryDetail
 from app.services.ai_service import AIService
 from app.services.story_extractor import StoryExtractor
@@ -30,6 +30,7 @@ async def generate_story_async(story_id: str, request: StoryRequest, user_id: st
         A dictionary with the task result.
     """
     db_client = StoryRepository()
+    scene_db_client = SceneRepository()
     storage_service = StorageService()
     story_prompt_service = StoryPromptService()
 
@@ -106,7 +107,7 @@ async def generate_story_async(story_id: str, request: StoryRequest, user_id: st
                 )
                 generated_scenes.append(current_scene)
                 
-                await process_single_scene(db_client, storage_service, ai_service, story_id, i, current_scene)
+                await process_single_scene(scene_db_client, storage_service, ai_service, story_id, i, current_scene)
         
         # Complete story with all generated scenes and updated data
         return await complete_story(db_client, story_data, generated_scenes)
@@ -115,7 +116,7 @@ async def generate_story_async(story_id: str, request: StoryRequest, user_id: st
         logger.exception(f"[GENERATOR] Error occurred for story_id={story_id}")
         return await handle_story_error(db_client, story_id, e)
 
-async def process_single_scene(db_client: StoryRepository, storage_service: StorageService, 
+async def process_single_scene(scene_db_client: SceneRepository, storage_service: StorageService, 
                        ai_service: AIService, story_id: str, index: int, scene: Scene):
     """Process a single scene including media generation and database storage."""
     logger.info(f"[GENERATOR] Processing scene {index+1}")
@@ -125,16 +126,7 @@ async def process_single_scene(db_client: StoryRepository, storage_service: Stor
     
     # Create and update scene in database
     # The scene object already contains all fields including image_prompt
-    await db_client.create_scene(
-        scene_id=str(scene.scene_id),
-        story_id=story_id,
-        sequence=index,
-        title=scene.title,
-        text=scene.text,
-        image_prompt=scene.image_prompt,
-        image_url=scene.image_url,
-        audio_url=scene.audio_url
-    )
+    await scene_db_client.create_scene(scene)
     logger.info(f"[GENERATOR] Scene {index+1} created successfully in DB")
 
 async def generate_and_store_media(storage_service: StorageService, ai_service: AIService, 

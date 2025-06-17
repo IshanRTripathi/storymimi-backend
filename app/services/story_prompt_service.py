@@ -84,7 +84,7 @@ TASK:
    - prev_scene_summary (empty for 1st scene) has a very concise description of the previous scene and the action happening in the previous scene for consistency in current scene.
 
 Ensure all fields are present; autofill with relevant values in case not provided.
-scene_count [3,5]
+scene_count [min:3, max:6]
 age [3,6]
 text [700-1000 words]
 accessories [headband, headphones, glasses, bangles, bracelet, watch]
