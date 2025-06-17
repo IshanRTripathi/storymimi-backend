@@ -12,6 +12,69 @@ from app.services.story_prompt_service import StoryPromptService
 # Set up logging
 logger = logging.getLogger(__name__)
 
+class ElevenLabsTTSClient:
+    """Modular ElevenLabs TTS client supporting v2 and v3, with robust error handling and logging."""
+    def __init__(self, api_key: str, voice_id: str, use_v3: bool = False, timeout: int = 100, max_retries: int = 3):
+        self.api_key = api_key
+        self.voice_id = voice_id
+        self.use_v3 = use_v3
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.endpoint = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}"
+        self.output_format = "mp3_22050_32"  # can be made configurable
+
+    async def generate_audio(self, text: str) -> bytes:
+        headers = {
+            "xi-api-key": self.api_key,
+            "Content-Type": "application/json",
+            "Accept": "audio/mpeg"
+        }
+        payload = {
+            "text": text
+        }
+        if self.use_v3:
+            payload["model_id"] = "eleven_v3"
+            payload["voice_settings"] = {
+                "stability": 0.7,
+                "similarity_boost": 0.7,
+                "style": 0.7,
+                "use_speaker_boost": True
+            }
+        params = {"output_format": self.output_format}
+        backoff = 1
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                logger.info(f"[ElevenLabsTTS] Attempt {attempt} | v3={self.use_v3} | Text len: {len(text)}")
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    resp = await client.post(self.endpoint, headers=headers, json=payload, params=params)
+                if resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", backoff))
+                    logger.warning(f"[ElevenLabsTTS] 429 Rate Limit. Retrying after {retry_after}s...")
+                    await asyncio.sleep(retry_after)
+                    backoff *= 2
+                    continue
+                resp.raise_for_status()
+                logger.info(f"[ElevenLabsTTS] Success. Audio bytes: {len(resp.content)}")
+                return resp.content
+            except httpx.RequestError as e:
+                logger.warning(f"[ElevenLabsTTS] Network error: {e}. Retrying in {backoff}s...")
+                await asyncio.sleep(backoff)
+                backoff *= 2
+            except httpx.HTTPStatusError as e:
+                try:
+                    error_payload = e.response.json()
+                except Exception:
+                    error_payload = e.response.text
+                logger.error(f"[ElevenLabsTTS] HTTP error: {e}, payload: {error_payload}")
+                if e.response.status_code == 429:
+                    retry_after = int(e.response.headers.get("Retry-After", backoff))
+                    logger.warning(f"[ElevenLabsTTS] 429 Rate Limit. Retrying after {retry_after}s...")
+                    await asyncio.sleep(retry_after)
+                    backoff *= 2
+                    continue
+                raise
+        raise RuntimeError(f"ElevenLabs TTS failed after {self.max_retries} retries")
+
 class AIService:
     """Service for interacting with AI APIs (OpenRouter, Together.ai, ElevenLabs)"""
     
@@ -25,6 +88,15 @@ class AIService:
             self.story_prompt_service = StoryPromptService()
         self.timeout = 100
         self.max_retries = 3
+        # ElevenLabs feature flag
+        self.elevenlabs_use_v3 = getattr(settings, "ELEVENLABS_USE_V3", False)
+        self.elevenlabs_tts = ElevenLabsTTSClient(
+            api_key=settings.ELEVENLABS_API_KEY,
+            voice_id=settings.ELEVENLABS_VOICE_ID,
+            use_v3=self.elevenlabs_use_v3,
+            timeout=self.timeout,
+            max_retries=self.max_retries
+        )
 
     async def __aenter__(self):
         """Initialize the httpx client when entering the context manager"""
@@ -40,7 +112,7 @@ class AIService:
         await self.client.aclose()
     
     async def _call_api_with_retries(self, method: str, url: str, headers: Dict, json_data: Dict = None, content_type: str = "application/json") -> httpx.Response:
-        """Internal method to call an external API with retry logic."""
+        """Internal method to call an external API with retry logic, 429 handling, and error logging."""
         backoff = 1
         for attempt in range(1, self.max_retries + 1):
             try:
@@ -50,9 +122,16 @@ class AIService:
                         resp = await self.client.post(url, headers=headers, json=json_data)
                     else:
                         resp = await self.client.post(url, headers=headers, content=json_data)
+                elif method == "get":
+                    resp = await self.client.get(url, headers=headers, params=json_data)
                 else:
                     raise ValueError(f"Unsupported HTTP method: {method}")
-                
+                if resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", backoff))
+                    logger.warning(f"[API Rate Limit] 429 received. Retrying after {retry_after}s...")
+                    await asyncio.sleep(retry_after)
+                    backoff *= 2
+                    continue
                 resp.raise_for_status()
                 logger.info(f"[API Attempt {attempt} success] Response received from {url}")
                 return resp
@@ -60,6 +139,20 @@ class AIService:
                 logger.warning(f"[API Retry {attempt}] {e}, retrying {url} in {backoff}s...")
                 await asyncio.sleep(backoff)
                 backoff *= 2
+            except httpx.HTTPStatusError as e:
+                # Log error payload if available
+                try:
+                    error_payload = e.response.json()
+                except Exception:
+                    error_payload = e.response.text
+                logger.error(f"[API Error] {e}, payload: {error_payload}")
+                if e.response.status_code == 429:
+                    retry_after = int(e.response.headers.get("Retry-After", backoff))
+                    logger.warning(f"[API Rate Limit] 429 received. Retrying after {retry_after}s...")
+                    await asyncio.sleep(retry_after)
+                    backoff *= 2
+                    continue
+                raise
         raise RuntimeError(f"API call to {url} failed after {self.max_retries} retries")
 
     async def generate_text(self, prompt: str) -> str:
@@ -219,61 +312,20 @@ class AIService:
             logger.error(f"Error generating image: {str(e)}", exc_info=True)
             raise
     
-    async def generate_audio(self, text: str, voice_id: str = "21m00Tcm4TlvDq8ikWAM") -> bytes:
-        """Generate audio using ElevenLabs API
-        
-        Args:
-            text: The text to convert to speech
-            voice_id: The ID of the voice to use
-            
-        Returns:
-            Raw audio bytes
-            
-        Raises:
-            Exception: If the API call fails
-        """
+    async def generate_audio(self, text: str, voice_id: str = None) -> bytes:
+        """Generate audio using ElevenLabs API (v2 or v3, feature-flagged)."""
         if settings.USE_MOCK_AI_SERVICES:
             logger.info("Using mock audio generation")
-            return await self.mock_service.generate_audio(text, voice_id)
-        
-        logger.info(f"Generating audio with ElevenLabs V3 for text length: {len(text)}")
-        logger.debug(f"Using voice_id: {voice_id}")
-        
-        headers = {
-            "xi-api-key": settings.ELEVENLABS_API_KEY,
-            "Content-Type": "application/json",
-            "Accept": "audio/mpeg"
-        }
-        
-        # V3-specific settings for storytelling
-        payload = {
-            "text": text,
-            "model_id": "eleven_v3",
-            "voice_settings": {
-                "stability": 0.7,  # Creative mode for more expressiveness
-                "similarity_boost": 0.7,
-                "style": 0.7,  # New in V3
-                "use_speaker_boost": True  # Better voice consistency
-            }
-        }
-        
-        try:
-            logger.debug("Sending request to ElevenLabs V3 API")
-            response = await self._call_api_with_retries(
-                "post", 
-                f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
-                headers=headers,
-                json_data=payload
+            return await self.mock_service.generate_audio(text, voice_id or settings.ELEVENLABS_VOICE_ID)
+        # Use the modular TTS client
+        if voice_id and voice_id != self.elevenlabs_tts.voice_id:
+            # If a different voice is requested, create a temp client
+            tts_client = ElevenLabsTTSClient(
+                api_key=settings.ELEVENLABS_API_KEY,
+                voice_id=voice_id,
+                use_v3=self.elevenlabs_use_v3,
+                timeout=self.timeout,
+                max_retries=self.max_retries
             )
-            
-            audio_content = response.content
-            if not audio_content or len(audio_content) < 100:
-                logger.error("Invalid audio content received from ElevenLabs API")
-                raise ValueError("Invalid audio content from API")
-                
-            logger.info(f"Successfully generated audio, size: {len(audio_content)} bytes")
-            return audio_content
-            
-        except Exception as e:
-            logger.error(f"Error generating audio: {str(e)}", exc_info=True)
-            raise
+            return await tts_client.generate_audio(text)
+        return await self.elevenlabs_tts.generate_audio(text)

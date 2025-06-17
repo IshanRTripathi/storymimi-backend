@@ -87,9 +87,9 @@ async def generate_story_async(story_id: str, request: StoryRequest, user_id: st
             for i, llm_scene in enumerate(scenes_from_llm):
                 scene_text = llm_scene.get("text", "")
                 scene_title = llm_scene.get("scene_number", i + 1) # Use scene_number as title, or sequence
-                
+                story_so_far = llm_scene.get("story_so_far", "")
                 # Generate scene moment
-                scene_moment_prompt = await story_prompt_service.generate_scene_moment(scene_text)
+                scene_moment_prompt = await story_prompt_service.generate_scene_moment(scene_text, story_so_far)
 
                 # Compose full image prompt
                 full_image_prompt = f"Base style: {base_style}. In {story_meta.get('setting_description', 'a magical setting')}, {child_profile.get('name', 'a child')}, {visual_profile.get('character_prompt', '')}, {scene_moment_prompt} {visual_profile.get('side_character_prompt', '')}".strip()
@@ -144,7 +144,7 @@ async def generate_and_store_media(storage_service: StorageService, ai_service: 
     logger.debug(f"[GENERATOR] Generating and uploading image for scene {index+1}")
     try:
         image_bytes = await ai_service.generate_image(scene.image_prompt)
-        image_url = storage_service.upload_image(story_id, index, image_bytes)
+        image_url = await storage_service.upload_image(story_id, index, image_bytes)
         scene.image_url = image_url
         logger.debug(f"[GENERATOR] Image URL: {image_url}")
     except Exception as e:
@@ -155,7 +155,7 @@ async def generate_and_store_media(storage_service: StorageService, ai_service: 
     logger.debug(f"[GENERATOR] Generating and uploading audio for scene {index+1}")
     try:
         audio_bytes = await ai_service.generate_audio(scene.text)
-        audio_url = storage_service.upload_audio(story_id, index, audio_bytes)
+        audio_url = await storage_service.upload_audio(story_id, index, audio_bytes)
         scene.audio_url = audio_url
         logger.debug(f"[GENERATOR] Audio URL: {audio_url}")
     except Exception as e:

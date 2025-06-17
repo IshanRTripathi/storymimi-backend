@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     TOGETHER_API_KEY: str
     ELEVENLABS_API_KEY: str
     ELEVENLABS_VOICE_ID: str
+    ELEVENLABS_USE_V3: bool = False
     
     # AI Service URLs and Models
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"

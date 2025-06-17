@@ -29,8 +29,8 @@ if not llm_file_logger.handlers:
 
 # Helper to log LLM responses
 def log_llm_response(context: str, prompt: str, response: str):
-    # llm_file_logger.info(f"[LLM] Context: {context}\nPrompt: {prompt}\nResponse: {response}\n{'-'*80}")
-    logger.info(f"[LLM] Context: {context}\nPrompt: {prompt}\nResponse: {response}\n{'-'*80}")
+    llm_file_logger.info(f"[LLM] Context: {context}\nPrompt: {prompt}\nResponse: {response}\n{'-'*80}")
+    # logger.info(f"[LLM] Context: {context}\nPrompt: {prompt}\nResponse: {response}\n{'-'*80}")
 
 # Helper to clean LLM responses of markdown/code block/beautifying characters
 def clean_llm_response(content: str) -> str:
@@ -79,12 +79,14 @@ TASK:
    - child_profile: name, age, gender, personality (list), fears (list), favorites {{animal, color, toy}}, physical_appearance {{height, build, skin_tone, hair_style, hair_length, hair_color, accessories, clothing {{top, bottom, shoes}}}}
    - side_character: exists (true/false), description
    - story_meta: value_to_teach, setting_description, scene_count, tone, story_title
-   - scenes: array of {{scene_number, text}}
+   - scenes: array of {{scene_number, text, prev_scene_summary}}
    - text has a very well detailed description of the scene and the action happening in the scene with consistency.
+   - prev_scene_summary (empty for 1st scene) has a very concise description of the previous scene and the action happening in the previous scene for consistency in current scene.
 
 Ensure all fields are present; autofill with relevant values in case not provided.
 scene_count [3,5]
 age [3,6]
+text [700-1000 words]
 accessories [headband, headphones, glasses, bangles, bracelet, watch]
 side_character [animal, bird, fairy, robot, balloon]
 value_to_teach [kindness, empathy, thoughfulness, love, extrovert]
@@ -96,25 +98,26 @@ USER INPUT:
 """
 
         self.VISUAL_PROFILE_PROMPT_TEMPLATE = """
-You are a visual prompt specialist that provides in depth detailed visual description for story-telling.
+You are a visual prompt specialist that provides in depth detailed visual description for consistent story-telling.
 INPUT:
 {character_json}
 
 OUTPUT JSON:
-- character_prompt: one sentence describing the child's appearance, outfit, and distinguishing details.
+- character_prompt: describing the child's appearance, outfit, and distinguishing features in detail required for consistency.
 - side_character_prompt: one sentence describing the side character or toy's appearance and presence, color, structure.
 
 IMPORTANT: Do NOT format the response as markdown, code block, or with any beautifying characters. Return only raw, valid JSON, with no extra formatting or decoration.
 """
 
         self.BASE_STYLE_PROMPT_TEMPLATE = """
-You are an expert art director that has speciality in generating base for images.
+You are an expert art director that has speciality in generating base/background for images for consistent story-telling.
 INPUT:
 - Setting description: {setting}
 - Tone: {tone}
 
 OUTPUT:
-One detailed base prompt describing the visual style (mood, lighting, art style, color palette) to be applied consistently across all scenes along with specific art style from anime, pixar, ghibli, watercolour, etc. Return only the prompt string.
+Base prompt describing the visual style (mood, lighting, art style, color palette) to be applied consistently across all scenes along with specific art style.
+art style select one from anime, pixar, ghibli, watercolour, etc. Number of words should be around 40.
 
 IMPORTANT: Do NOT format the response as markdown, code block, or with any beautifying characters. Return only the raw string, with no extra formatting or decoration.
 """
@@ -122,10 +125,11 @@ IMPORTANT: Do NOT format the response as markdown, code block, or with any beaut
         self.SCENE_MOMENT_PROMPT_TEMPLATE = """
 You are a detailed image prompt writer for children's book scenes.
 INPUT:
-{scene_text}
+- Story so far: {story_so_far}
+- Current scene text: {scene_text}
 
 OUTPUT:
-One descriptive phrase capturing the visual moment/action for this scene. Add elements like actions performed by the character or side character based on the scene text. Return only the phrase.
+One descriptive phrase capturing the visual moment/action for this scene. Add elements like actions performed by the character or side character based on the scene text instead of just making the character doing a single pose across all scenes. Ensure the scene is consistent and believable, logically following from previous events and the story context. Do not contradict earlier scenes.
 
 IMPORTANT: Do NOT format the response as markdown, code block, or with any beautifying characters. Return only the raw string, with no extra formatting or decoration.
 """
@@ -191,9 +195,9 @@ IMPORTANT: Do NOT format the response as markdown, code block, or with any beaut
         content = clean_llm_response(content)
         return content.strip().strip('"')
 
-    async def generate_scene_moment(self, scene_text: str) -> str:
-        """Async version of scene moment generation."""
-        prompt = self.SCENE_MOMENT_PROMPT_TEMPLATE.format(scene_text=scene_text)
+    async def generate_scene_moment(self, scene_text: str, story_so_far: str = "") -> str:
+        """Async version of scene moment generation, with context for consistency."""
+        prompt = self.SCENE_MOMENT_PROMPT_TEMPLATE.format(scene_text=scene_text, story_so_far=story_so_far)
         response = await self._call_llm(prompt, self.scene_moment_model)
         content = response["choices"][0]["message"]["content"]
         log_llm_response('generate_scene_moment', prompt, str(content))

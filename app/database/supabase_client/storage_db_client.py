@@ -3,11 +3,12 @@ import uuid
 from typing import Dict, List, Optional, Any, Union, Tuple
 from datetime import datetime
 from pathlib import Path
-
+import asyncio
 from app.database.supabase_client.base_db_client import SupabaseBaseClient
 import logging
 import time
 from supabase import create_client, Client
+import functools
 
 logger = logging.getLogger(__name__)
 
@@ -126,19 +127,21 @@ class StorageService(SupabaseBaseClient):
             raise StorageError(f"Failed to ensure bucket {bucket_name} exists") from e
 
     async def upload_image(self, story_id: str, scene_num: int, image_bytes: bytes) -> str:
-        """Upload an image to Supabase Storage and return its public URL."""
+        """Upload an image to Supabase Storage and return its public URL (non-blocking)."""
         file_path = f"{story_id}/scene_{scene_num}.png"
         backoff = 1
-        
+        loop = asyncio.get_running_loop()
         for attempt in range(1, self.max_retries + 1):
             try:
                 logger.info(f"[📤 Upload Attempt {attempt}] Uploading image for scene {scene_num}...")
-                self.client.storage.from_(self.IMAGE_BUCKET).upload(
-                    file_path,
-                    image_bytes,
-                    {"content-type": "image/png"}
-                )
-                public_url = self.client.storage.from_(self.IMAGE_BUCKET).get_public_url(file_path)
+                def sync_upload():
+                    self.client.storage.from_(self.IMAGE_BUCKET).upload(
+                        file_path,
+                        image_bytes,
+                        {"content-type": "image/png"}
+                    )
+                    return self.client.storage.from_(self.IMAGE_BUCKET).get_public_url(file_path)
+                public_url = await loop.run_in_executor(None, sync_upload)
                 logger.info(f"[✅ Upload success] Image uploaded for scene {scene_num}")
                 return public_url
             except Exception as e:
@@ -146,23 +149,25 @@ class StorageService(SupabaseBaseClient):
                 if attempt == self.max_retries:
                     logger.error(f"[Upload Failed] Failed after {self.max_retries} retries: {str(e)}")
                     raise RuntimeError(f"Image upload failed after {self.max_retries} retries: {str(e)}")
-                time.sleep(backoff)
+                await asyncio.sleep(backoff)
                 backoff *= 2
 
     async def upload_audio(self, story_id: str, scene_num: int, audio_bytes: bytes) -> str:
-        """Upload an audio file to Supabase Storage and return its public URL."""
+        """Upload an audio file to Supabase Storage and return its public URL (non-blocking)."""
         file_path = f"{story_id}/scene_{scene_num}.mp3"
         backoff = 1
-        
+        loop = asyncio.get_running_loop()
         for attempt in range(1, self.max_retries + 1):
             try:
                 logger.info(f"[📤 Upload Attempt {attempt}] Uploading audio for scene {scene_num}...")
-                self.client.storage.from_(self.AUDIO_BUCKET).upload(
-                    file_path,
-                    audio_bytes,
-                    {"content-type": "audio/mpeg"}
-                )
-                public_url = self.client.storage.from_(self.AUDIO_BUCKET).get_public_url(file_path)
+                def sync_upload():
+                    self.client.storage.from_(self.AUDIO_BUCKET).upload(
+                        file_path,
+                        audio_bytes,
+                        {"content-type": "audio/mpeg"}
+                    )
+                    return self.client.storage.from_(self.AUDIO_BUCKET).get_public_url(file_path)
+                public_url = await loop.run_in_executor(None, sync_upload)
                 logger.info(f"[✅ Upload success] Audio uploaded for scene {scene_num}")
                 return public_url
             except Exception as e:
@@ -170,7 +175,7 @@ class StorageService(SupabaseBaseClient):
                 if attempt == self.max_retries:
                     logger.error(f"[Upload Failed] Failed after {self.max_retries} retries: {str(e)}")
                     raise RuntimeError(f"Audio upload failed after {self.max_retries} retries: {str(e)}")
-                time.sleep(backoff)
+                await asyncio.sleep(backoff)
                 backoff *= 2
     
     def delete_file(self, bucket_name: str, file_path: str) -> bool:
