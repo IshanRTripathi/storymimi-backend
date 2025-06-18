@@ -28,6 +28,8 @@ class JSONConverter:
         try:
             return Scene(
                 scene_id=data["scene_id"],
+                story_id=data["story_id"],
+                sequence=data["sequence"],
                 title=data["title"],
                 text=data["text"],
                 image_prompt=data["image_prompt"],

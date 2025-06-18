@@ -20,6 +20,8 @@ class StoryStatus(str, Enum):
 class Scene(BaseModel):
     """Model for a story scene"""
     scene_id: UUID = Field(description="Unique identifier for the scene")
+    story_id: UUID = Field(description="ID of the story this scene belongs to")
+    sequence: int = Field(description="Sequence number of the scene in the story")
     title: str = Field(description="Scene title", min_length=1, max_length=200)
     text: str = Field(description="Scene text", min_length=1, max_length=5000)
     image_prompt: str = Field(description="Prompt for generating scene image", min_length=1, max_length=3000)

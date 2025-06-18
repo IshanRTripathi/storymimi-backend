@@ -29,9 +29,11 @@ class StoryProcessor:
         story_data["updated_by"] = "system"
         
         # Add scene-level backend fields
-        for scene in story_data.get("scenes", []):
+        for i, scene in enumerate(story_data.get("scenes", [])):
             scene["created_at"] = now.isoformat()
             scene["updated_at"] = now.isoformat()
             scene["updated_by"] = "system"
+            scene["story_id"] = story_data["story_id"]  # Link scene to story
+            scene["sequence"] = i + 1  # 1-based sequence
         
         return story_data

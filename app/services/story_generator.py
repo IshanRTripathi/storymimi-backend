@@ -97,6 +97,8 @@ async def generate_story_async(story_id: str, request: StoryRequest, user_id: st
 
                 current_scene = Scene(
                     scene_id=uuid4(),
+                    story_id=UUID(story_id),
+                    sequence=i + 1,  # 1-based sequence
                     title=f"Scene {scene_title}",
                     text=scene_text,
                     image_prompt=full_image_prompt, # Use the generated full prompt
@@ -166,6 +168,8 @@ async def complete_story(db_client: StoryRepository, story_data: Dict[str, Any],
     for scene in scenes:
         scene_dict = {
             "scene_id": str(scene.scene_id),
+            "story_id": str(scene.story_id),
+            "sequence": scene.sequence,
             "title": scene.title,
             "text": scene.text,
             "image_prompt": scene.image_prompt,
