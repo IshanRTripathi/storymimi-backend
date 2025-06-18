@@ -435,7 +435,7 @@ class SupabaseClient:
         Returns:
             bool: True if scene was created successfully, False otherwise
         """
-        
+        start_time = time.time()
         try:
             response = self.client.table("scenes").insert(scene_data).execute()
             
@@ -960,7 +960,8 @@ class SupabaseClient:
         Raises:
             Exception: If audio upload fails
         """
-        bucket_name = "story-audio"
+        start_time = time.time()
+        bucket_name = "audio"
         file_path = f"{story_id}/scene_{scene_sequence}.mp3"
         
         try:
@@ -993,7 +994,8 @@ class SupabaseClient:
         Raises:
             Exception: If image upload fails
         """
-        bucket_name = "story-images"
+        start_time = time.time()
+        bucket_name = "images"
         file_path = f"{story_id}/scene_{scene_sequence}.png"
         
         # Ensure the bucket exists

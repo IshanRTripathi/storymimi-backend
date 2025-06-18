@@ -8,8 +8,11 @@ from typing import Any, Dict, Optional, Union
 import httpx
 from app.config import settings
 from app.models.story_types import StoryRequest
+from app.utils.json_sanitizer import validate_and_parse_llm_json, retry_on_json_error, validate_json_structure, fix_common_json_issues
 import base64
 import re
+from app.utils.prompt_limits import get_component_limit, get_model_limits, MAX_TOTAL_PROMPT_LENGTH, PROMPT_COMPONENT_ALLOCATIONS, MODEL_SPECIFIC_LIMITS
+from app.services.prompt_templates import STORY_PROMPT_TEMPLATE, VISUAL_PROFILE_PROMPT_TEMPLATE, BASE_STYLE_PROMPT_TEMPLATE, SCENE_MOMENT_PROMPT_TEMPLATE, STORY_STRUCTURE, VISUAL_PROFILE_STRUCTURE, BASE_STYLE_STRUCTURE, SCENE_MOMENT_STRUCTURE
 
 logger = logging.getLogger(__name__)
 
@@ -32,28 +35,6 @@ def log_llm_response(context: str, prompt: str, response: str):
     llm_file_logger.info(f"[LLM] Context: {context}\nPrompt: {prompt}\nResponse: {response}\n{'-'*80}")
     # logger.info(f"[LLM] Context: {context}\nPrompt: {prompt}\nResponse: {response}\n{'-'*80}")
 
-# Helper to clean LLM responses of markdown/code block/beautifying characters
-def clean_llm_response(content: str) -> str:
-    """
-    Remove markdown/code block formatting and beautifying characters from LLM responses.
-    Only strips wrapping formatting, not content inside JSON/strings.
-    """
-    content = content.strip()
-    # Remove code block (``` or ```json)
-    if content.startswith("```"):
-        lines = content.splitlines()
-        # Remove the first line if it starts with '```' or '```json'
-        if lines and lines[0].strip().startswith("```"):
-            lines = lines[1:]
-        # Remove the last line if it's just ```
-        if lines and lines[-1].strip().startswith("```"):
-            lines = lines[:-1]
-        content = "\n".join(lines).strip()
-    # Remove leading/trailing asterisks, underscores, tildes, etc (but not inside JSON)
-    content = re.sub(r'^[*_~\s]+', '', content)
-    content = re.sub(r'[*_~\s]+$', '', content)
-    return content
-
 class StoryPromptService:
     """
     Service for generating various LLM prompts and interacting with OpenRouter.
@@ -69,70 +50,6 @@ class StoryPromptService:
         self.visual_profile_model = settings.VISUAL_PROFILE_MODEL
         self.base_style_model = settings.BASE_STYLE_MODEL
         self.scene_moment_model = settings.SCENE_MOMENT_MODEL
-
-        # Prompt Templates from storygen.py, with explicit instruction to not format/beautify
-        self.STORY_PROMPT_TEMPLATE = """
-You are a seasoned children's story writer and data extractor.
-
-TASK:
-1. Convert user input into structured JSON with:
-   - child_profile: name, age, gender, personality (list), fears (list), favorites {{animal, color, toy}}, physical_appearance {{height, build, skin_tone, hair_style, hair_length, hair_color, accessories, clothing {{top, bottom, shoes}}}}
-   - side_character: exists (true/false), description
-   - story_meta: value_to_teach, setting_description, scene_count, tone, story_title
-   - scenes: array of {{scene_number, text, prev_scene_summary}}
-   - text has a very well detailed description of the scene and the action happening in the scene with consistency.
-   - prev_scene_summary (empty for 1st scene) has a very concise description of the previous scene and the action happening in the previous scene for consistency in current scene.
-
-Ensure all fields are present; autofill with relevant values in case not provided.
-scene_count [min:3, max:6]
-age [3,6]
-text [700-1000 words]
-accessories [headband, headphones, glasses, bangles, bracelet, watch]
-side_character [animal, bird, fairy, robot, balloon]
-value_to_teach [kindness, empathy, thoughfulness, love, extrovert]
-
-IMPORTANT: Do NOT format the response as markdown, code block, or with any beautifying characters. Return only raw, valid JSON, with no extra formatting or decoration.
-
-USER INPUT:
-'''{user_input}'''
-"""
-
-        self.VISUAL_PROFILE_PROMPT_TEMPLATE = """
-You are a visual prompt specialist that provides in depth detailed visual description for consistent story-telling.
-INPUT:
-{character_json}
-
-OUTPUT JSON:
-- character_prompt: describing the child's appearance, outfit, and distinguishing features in detail required for consistency.
-- side_character_prompt: one sentence describing the side character or toy's appearance and presence, color, structure.
-
-IMPORTANT: Do NOT format the response as markdown, code block, or with any beautifying characters. Return only raw, valid JSON, with no extra formatting or decoration.
-"""
-
-        self.BASE_STYLE_PROMPT_TEMPLATE = """
-You are an expert art director that has speciality in generating base/background for images for consistent story-telling.
-INPUT:
-- Setting description: {setting}
-- Tone: {tone}
-
-OUTPUT:
-Base prompt describing the visual style (mood, lighting, art style, color palette) to be applied consistently across all scenes along with specific art style.
-art style select one from anime, pixar, ghibli, watercolour, etc. Number of words should be around 40.
-
-IMPORTANT: Do NOT format the response as markdown, code block, or with any beautifying characters. Return only the raw string, with no extra formatting or decoration.
-"""
-
-        self.SCENE_MOMENT_PROMPT_TEMPLATE = """
-You are a detailed image prompt writer for children's book scenes.
-INPUT:
-- Story so far: {story_so_far}
-- Current scene text: {scene_text}
-
-OUTPUT:
-One descriptive phrase capturing the visual moment/action for this scene. Add elements like actions performed by the character or side character based on the scene text instead of just making the character doing a single pose across all scenes. Ensure the scene is consistent and believable, logically following from previous events and the story context. Do not contradict earlier scenes.
-
-IMPORTANT: Do NOT format the response as markdown, code block, or with any beautifying characters. Return only the raw string, with no extra formatting or decoration.
-"""
 
     async def _call_llm(self, prompt: str, model: str) -> Dict[str, Any]:
         """Async version of LLM call for backward compatibility."""
@@ -159,47 +76,101 @@ IMPORTANT: Do NOT format the response as markdown, code block, or with any beaut
                     await asyncio.sleep(backoff)
                     backoff *= 2
 
+    @retry_on_json_error(max_retries=3)
     async def generate_structured_story(self, user_input: str) -> Dict[str, Any]:
         """Async version of structured story generation."""
-        prompt = self.STORY_PROMPT_TEMPLATE.format(user_input=user_input)
+        prompt = STORY_PROMPT_TEMPLATE.format(user_input=user_input)
         response = await self._call_llm(prompt, self.story_model)
         content = response["choices"][0]["message"]["content"]
-        log_llm_response('generate_structured_story', prompt, str(content))
-        content = clean_llm_response(content)
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse structured story JSON: {e}, raw content: {content}")
-            raise ValueError("LLM returned invalid JSON for structured story.") from e
+        log_llm_response('generate_structured_story', prompt, fix_common_json_issues(str(content)))
+        story_data = validate_and_parse_llm_json(content)
+        validate_json_structure(story_data, STORY_STRUCTURE)
+        return story_data
 
+    @retry_on_json_error(max_retries=3)
     async def generate_visual_profile(self, child_profile: Dict[str, Any], side_char: Dict[str, Any]) -> Dict[str, str]:
-        """Async version of visual profile generation."""
+        """Async version of visual profile generation with enhanced structure."""
         data = {**child_profile, **side_char}
-        prompt = self.VISUAL_PROFILE_PROMPT_TEMPLATE.format(character_json=json.dumps(data))
+        prompt = VISUAL_PROFILE_PROMPT_TEMPLATE.format(character_json=json.dumps(data))
         response = await self._call_llm(prompt, self.visual_profile_model)
         content = response["choices"][0]["message"]["content"]
-        log_llm_response('generate_visual_profile', prompt, str(content))
-        content = clean_llm_response(content)
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse visual profile JSON: {e}, raw content: {content}")
-            raise ValueError("LLM returned invalid JSON for visual profile.") from e
+        log_llm_response('generate_visual_profile', prompt, fix_common_json_issues(str(content)))
+        visual_profile_json = validate_and_parse_llm_json(content)
+        validate_json_structure(visual_profile_json, VISUAL_PROFILE_STRUCTURE)
+        return visual_profile_json
 
+    @retry_on_json_error(max_retries=3)
     async def generate_base_style(self, setting: str, tone: str) -> str:
         """Async version of base style generation."""
-        prompt = self.BASE_STYLE_PROMPT_TEMPLATE.format(setting=setting, tone=tone)
+        prompt = BASE_STYLE_PROMPT_TEMPLATE.format(setting=setting, tone=tone)
         response = await self._call_llm(prompt, self.base_style_model)
         content = response["choices"][0]["message"]["content"]
-        log_llm_response('generate_base_style', prompt, str(content))
-        content = clean_llm_response(content)
-        return content.strip().strip('"')
+        log_llm_response('generate_base_style', prompt, fix_common_json_issues(str(content)))
+        base_style_json = validate_and_parse_llm_json(content)
+        validate_json_structure(base_style_json, BASE_STYLE_STRUCTURE)
+        # Format the base style into a descriptive string
+        style = base_style_json["base_style"]
+        base_style_str = (
+            f"{style['art_style']} style with {style['lighting']['primary_source']} lighting, "
+            f"creating a {style['atmosphere']['overall_mood']} atmosphere. "
+            f"Using a {style['color_scheme']['primary_palette']} color palette "
+            f"with {style['composition_rules']['focal_points']} focal points."
+        )
+        return base_style_str.strip()
 
+    @retry_on_json_error(max_retries=3)
     async def generate_scene_moment(self, scene_text: str, story_so_far: str = "") -> str:
         """Async version of scene moment generation, with context for consistency."""
-        prompt = self.SCENE_MOMENT_PROMPT_TEMPLATE.format(scene_text=scene_text, story_so_far=story_so_far)
+        prompt = SCENE_MOMENT_PROMPT_TEMPLATE.format(scene_text=scene_text, story_so_far=story_so_far)
         response = await self._call_llm(prompt, self.scene_moment_model)
         content = response["choices"][0]["message"]["content"]
-        log_llm_response('generate_scene_moment', prompt, str(content))
-        content = clean_llm_response(content)
-        return content.strip().strip('"') 
+        log_llm_response('generate_scene_moment', prompt, fix_common_json_issues(str(content)))
+        scene_moment_json = validate_and_parse_llm_json(content)
+        validate_json_structure(scene_moment_json, SCENE_MOMENT_STRUCTURE)
+        # Format the scene moment into a descriptive string
+        moment = scene_moment_json["scene_moment"]
+        scene_moment_str = (
+            f"{moment['primary_action']}, with {moment['character_emotions']['main_character']} "
+            f"and {moment['character_emotions']['side_character']}. "
+            f"{moment['spatial_arrangement']['character_positioning']} in "
+            f"a {moment['temporal_context']['time_of_day']} setting, "
+            f"emphasizing {moment['visual_emphasis']['focal_point']}."
+        )
+        return scene_moment_str.strip()
+
+    def _build_image_prompt(self, scene_data: dict, style: str = "children's book illustration") -> str:
+        """Build the image generation prompt with length limits for each component."""
+        
+        # Get component limits
+        base_limit = get_component_limit('base_style')
+        scene_limit = get_component_limit('scene')
+        char_limit = get_component_limit('characters')
+        atmos_limit = get_component_limit('atmosphere')
+        tech_limit = get_component_limit('technical')
+        
+        # Build components with limits
+        base_style = f"Base style: {style}"[:base_limit]
+        
+        scene_desc = f"Scene: {scene_data.get('setting', '')}. {scene_data.get('action', '')}"[:scene_limit]
+        
+        characters = f"Characters: {scene_data.get('characters', '')}"[:char_limit]
+        
+        atmosphere = (
+            f"Atmosphere: {scene_data.get('time_of_day', '')}, "
+            f"{scene_data.get('weather', '')}, {scene_data.get('mood', '')}"
+        )[:atmos_limit]
+        
+        technical = (
+            f"Technical details: High quality, detailed illustration, "
+            f"balanced composition, dynamic lighting"
+        )[:tech_limit]
+
+        # Combine all components
+        prompt = f"{base_style}. {scene_desc}. {characters}. {atmosphere}. {technical}"
+        
+        # Ensure total length is within limits
+        model_limits = get_model_limits('stable_diffusion')  # Or other model as needed
+        if len(prompt) > model_limits['max_length']:
+            prompt = prompt[:model_limits['max_length']]
+        
+        return prompt 

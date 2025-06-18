@@ -9,6 +9,7 @@ import logging
 import time
 from supabase import create_client, Client
 import functools
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -198,7 +199,7 @@ class StorageService(SupabaseBaseClient):
             logger.error(f"Failed to delete file {file_path} from bucket {bucket_name}: {str(e)}")
             raise StorageError(f"Failed to delete file: {str(e)}") from e
     
-    async def delete_story_files(self, story_id: Union[str, uuid]) -> Tuple[int, int]:
+    async def delete_story_files(self, story_id: Union[str, uuid.UUID]) -> Tuple[int, int]:
         """Delete all files associated with a story
         
         Args:

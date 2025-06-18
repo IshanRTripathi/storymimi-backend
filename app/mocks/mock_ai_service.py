@@ -150,49 +150,184 @@ class MockAIService:
                 "name": "Lily",
                 "age": 5,
                 "gender": "female",
-                "personality": ["curious", "brave"],
-                "fears": ["darkness"],
+                "personality": ["curious", "brave", "kind", "creative"],
+                "fears": ["darkness", "loud noises"],
                 "favorites": {"animal": "bunny", "color": "pink", "toy": "doll"},
-                "physical_appearance": {"height": "small", "build": "slender", "skin_tone": "fair", "hair_style": "braids", "hair_length": "long", "hair_color": "brown", "accessories": ["headband"], "clothing": {"top": "dress", "bottom": "leggings", "shoes": "sneakers"}}
+                "physical_appearance": {
+                    "height": "small",
+                    "build": "slender",
+                    "skin_tone": "fair",
+                    "hair_style": "braids",
+                    "hair_length": "long",
+                    "hair_color": "brown",
+                    "accessories": ["headband"],
+                    "clothing": {"top": "dress", "bottom": "leggings", "shoes": "sneakers"}
+                }
             },
             "side_character": {
                 "exists": True,
-                "description": "A small, fluffy, blue bunny named Patches"
+                "description": "A small, fluffy, blue bunny named Patches",
+                "relationship_to_main": "loyal companion and confidant",
+                "growth_arc": "learns to be brave alongside Lily"
             },
             "story_meta": {
                 "value_to_teach": "kindness",
                 "setting_description": "a whimsical forest",
                 "scene_count": 3,
                 "tone": "warm and magical",
-                "story_title": f"The Magical Journey of Lily and {user_input.split()[0] if user_input else 'Friend'}"
+                "story_title": f"The Magical Journey of Lily and {user_input.split()[0] if user_input else 'Friend'}",
+                "target_age_range": "4-6",
+                "difficulty_level": "beginner",
+                "educational_concepts": ["friendship", "bravery", "helping others"],
+                "emotional_themes": ["empathy", "courage", "joy"],
+                "content_warnings": [],
+                "readability_score": "age-appropriate"
             },
             "scenes": [
-                {"scene_number": 1, "text": "Lily, a curious girl, ventured into the Whispering Woods with her best friend, Patches the blue bunny."},
-                {"scene_number": 2, "text": "They discovered a hidden glade where glowing flowers bloomed, and a shy forest spirit greeted them."},
-                {"scene_number": 3, "text": "Lily and Patches shared their snacks with the spirit, learning the joy of giving, and returned home with a heart full of new friends."}
+                {
+                    "scene_number": 1,
+                    "text": "Lily, a curious girl, ventured into the Whispering Woods with her best friend, Patches the blue bunny.",
+                    "prev_scene_summary": "",
+                    "time_of_day": "bright morning",
+                    "emotional_arc": "excitement and anticipation",
+                    "learning_checkpoints": ["identifying emotions", "recognizing curiosity"],
+                    "character_development": {
+                        "main_character_state": "curious and slightly nervous",
+                        "side_character_state": "supportive and playful",
+                        "relationship_progress": "established trust"
+                    },
+                    "vocabulary_highlights": ["ventured", "whispering", "curious"]
+                },
+                {
+                    "scene_number": 2,
+                    "text": "They discovered a hidden glade where glowing flowers bloomed, and a shy forest spirit greeted them.",
+                    "prev_scene_summary": "Lily and Patches entered the magical forest together",
+                    "time_of_day": "golden afternoon",
+                    "emotional_arc": "wonder and gentle courage",
+                    "learning_checkpoints": ["being gentle with others", "respecting nature"],
+                    "character_development": {
+                        "main_character_state": "fascinated and gentle",
+                        "side_character_state": "protective and curious",
+                        "relationship_progress": "growing confidence in each other"
+                    },
+                    "vocabulary_highlights": ["discovered", "glade", "bloomed", "spirit"]
+                },
+                {
+                    "scene_number": 3,
+                    "text": "Lily and Patches shared their snacks with the spirit, learning the joy of giving, and returned home with hearts full of new friends.",
+                    "prev_scene_summary": "They met a shy forest spirit in a magical glade",
+                    "time_of_day": "warm sunset",
+                    "emotional_arc": "fulfillment and joy",
+                    "learning_checkpoints": ["sharing with others", "making new friends"],
+                    "character_development": {
+                        "main_character_state": "confident and happy",
+                        "side_character_state": "proud and content",
+                        "relationship_progress": "strengthened friendship"
+                    },
+                    "vocabulary_highlights": ["shared", "spirit", "giving", "hearts"]
+                }
             ]
         }
     
     async def generate_visual_profile(self, child_profile: Dict[str, Any], side_char: Dict[str, Any]) -> Dict[str, str]:
         """Mock visual profile generation."""
-        logger.info(f"[MOCK] Generating visual profile for child: {child_profile.get('name')}, side_char: {side_char.get('description')}")
+        logger.info("[MOCK] Generating visual profile...")
         await asyncio.sleep(self.delay_seconds)
         return {
-            "character_prompt": f"A {child_profile.get('age','young')} year old {child_profile.get('gender','child')} named {child_profile.get('name','')} with {child_profile.get('physical_appearance',{}).get('hair_color','')} {child_profile.get('physical_appearance',{}).get('hair_length','')} hair and {child_profile.get('physical_appearance',{}).get('hair_style','')}, wearing a {child_profile.get('physical_appearance',{}).get('clothing',{}).get('top','')} and {child_profile.get('physical_appearance',{}).get('clothing',{}).get('bottom','')}.",
-            "side_character_prompt": f"A {side_char.get('description','')}."
+            "character_prompt": {
+                "appearance_description": "A small girl with long brown braids and a pink flowery dress",
+                "emotional_state": "bright-eyed and cheerful expression",
+                "posture_and_movement": "light and bouncy steps with graceful movements",
+                "lighting_preferences": "soft warm light highlighting her face",
+                "consistent_elements": ["braided hair", "headband", "dress flow", "cheerful smile"]
+            },
+            "side_character_prompt": {
+                "appearance_description": "A fluffy blue bunny with floppy ears and a white cotton tail",
+                "relationship_positioning": "usually close to Lily's side or slightly ahead",
+                "movement_style": "gentle hops and playful bounces",
+                "visual_personality": "attentive ears, expressive eyes, protective stance"
+            },
+            "scene_composition_guidelines": {
+                "character_positioning": "Lily centered or slightly off-center with Patches nearby",
+                "perspective_preferences": "eye-level or slightly elevated angle",
+                "space_utilization": "characters occupy lower two-thirds of frame",
+                "background_integration": "characters stand out against softer background elements"
+            },
+            "color_palette": {
+                "primary_colors": ["soft pink", "sky blue", "forest green"],
+                "accent_colors": ["golden yellow", "lavender purple"],
+                "mood_specific_variations": {
+                    "happy": "brighter and warmer",
+                    "calm": "softer and cooler",
+                    "excited": "more vibrant and saturated"
+                }
+            }
         }
     
     async def generate_base_style(self, setting: str, tone: str) -> str:
         """Mock base style generation."""
-        logger.info(f"[MOCK] Generating base style for setting: {setting}, tone: {tone}")
+        logger.info("[MOCK] Generating base style...")
         await asyncio.sleep(self.delay_seconds)
-        return f"A vibrant, whimsical watercolor painting with soft, magical lighting and a pastel color palette, in the style of a classic children\'s book illustration."
+        return {
+            "base_style": {
+                "art_style": "ghibli",
+                "lighting": {
+                    "primary_source": "soft natural sunlight",
+                    "secondary_sources": "magical glows and sparkles",
+                    "mood_lighting": "warm golden highlights",
+                    "time_of_day_variations": "morning brightness to evening warmth"
+                },
+                "atmosphere": {
+                    "overall_mood": "whimsical and gentle",
+                    "weather_elements": "light breeze with floating leaves",
+                    "particle_effects": "subtle sparkles and glowing orbs",
+                    "depth_treatment": "layered forest elements with atmospheric perspective"
+                },
+                "color_scheme": {
+                    "primary_palette": "forest greens and sky blues",
+                    "accent_colors": "golden yellows and soft purples",
+                    "mood_variations": "warmer for joyful moments, cooler for calm scenes"
+                },
+                "composition_rules": {
+                    "layout_grid": "rule of thirds with dynamic diagonals",
+                    "focal_points": "character expressions and magical elements",
+                    "depth_layers": "detailed foreground, atmospheric background"
+                }
+            }
+        }
 
-    async def generate_scene_moment(self, scene_text: str) -> str:
+    async def generate_scene_moment(self, scene_text: str, story_so_far: str = "") -> str:
         """Mock scene moment generation."""
-        logger.info(f"[MOCK] Generating scene moment for text: {scene_text[:50]}...")
+        logger.info("[MOCK] Generating scene moment...")
         await asyncio.sleep(self.delay_seconds)
-        return f"A {scene_text[:50]}... with emphasis on action and emotion."
+        return {
+            "scene_moment": {
+                "primary_action": "Lily reaching out to touch a glowing flower",
+                "character_emotions": {
+                    "main_character": "wonder and gentle curiosity in her eyes",
+                    "side_character": "protective alertness with perked ears"
+                },
+                "spatial_arrangement": {
+                    "character_positioning": "Lily kneeling in foreground, Patches close behind",
+                    "environmental_interaction": "hands near glowing flora, feet on mossy ground",
+                    "depth_placement": "characters in foreground, magical elements in mid-ground"
+                },
+                "visual_emphasis": {
+                    "focal_point": "the interaction between hand and glowing flower",
+                    "supporting_elements": "floating sparkles and swirling leaves",
+                    "emotional_enhancers": "soft magical glow illuminating faces"
+                },
+                "temporal_context": {
+                    "time_of_day": "golden afternoon light",
+                    "weather_mood": "calm and clear with gentle breeze",
+                    "season_hints": "late spring blooms and fresh leaves"
+                },
+                "educational_integration": {
+                    "learning_elements": "careful observation of nature",
+                    "value_reinforcement": "gentle and respectful interaction with environment"
+                }
+            }
+        }
     
     async def generate_text(self, prompt: str) -> str:
         """Mock text generation that returns a sample text after a delay

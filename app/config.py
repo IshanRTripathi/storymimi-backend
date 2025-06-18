@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     
     # AI Service Configuration
     OPENROUTER_API_KEY: str
+    GEMINI_API_KEY: str
     TOGETHER_API_KEY: str
     ELEVENLABS_API_KEY: str
     ELEVENLABS_VOICE_ID: str
