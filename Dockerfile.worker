@@ -1,0 +1,88 @@
+# Multi-stage build for Worker service optimization
+FROM python:3.11-slim as builder
+
+# Set build-time environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Production stage
+FROM python:3.11-slim as production
+
+# Set production environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    C_FORCE_ROOT=1
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    procps \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user for security
+RUN useradd -m -u 1000 storymimi && \
+    mkdir -p /app && \
+    chown -R storymimi:storymimi /app
+
+# Copy virtual environment from builder stage
+COPY --from=builder /opt/venv /opt/venv
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code
+COPY --chown=storymimi:storymimi app/ ./app/
+COPY --chown=storymimi:storymimi worker_with_health.py ./
+COPY --chown=storymimi:storymimi worker.py ./
+
+# Create health check script
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+# Check if celery worker is responsive\n\
+if ! celery -A app.core.celery_app:celery_app inspect ping --timeout=10 > /dev/null 2>&1; then\n\
+    echo "Celery worker health check failed"\n\
+    exit 1\n\
+fi\n\
+\n\
+echo "Celery worker is healthy"\n\
+exit 0' > /app/health_check.sh && \
+    chmod +x /app/health_check.sh && \
+    chown storymimi:storymimi /app/health_check.sh
+
+# Switch to non-root user
+USER storymimi
+
+# Health check for worker service
+HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
+    CMD /app/health_check.sh
+
+# Start Celery worker with optimized settings
+CMD ["celery", "-A", "app.core.celery_app:celery_app", "worker", \
+     "--loglevel=info", \
+     "--concurrency=2", \
+     "--max-tasks-per-child=100", \
+     "--time-limit=3600", \
+     "--soft-time-limit=3300", \
+     "--without-gossip", \
+     "--without-mingle", \
+     "--without-heartbeat"]
