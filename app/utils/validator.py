@@ -161,16 +161,7 @@ class Validator:
                     raise ValueError("Scene image_url must be a string or None")
                 if scene_dict["audio_url"] is not None and not isinstance(scene_dict["audio_url"], str):
                     raise ValueError("Scene audio_url must be a string or None")
-                # Validate scene timestamps
-                try:
-                    scene_created_at = datetime.fromisoformat(scene_dict["created_at"])
-                    scene_updated_at = datetime.fromisoformat(scene_dict["updated_at"])
-                    if scene_created_at > scene_updated_at:
-                        raise ValueError("Scene created_at cannot be after updated_at")
-                except ValueError:
-                    raise ValueError("Scene timestamps must be valid ISO format strings")
-                except TypeError:
-                    raise ValueError("Scene timestamps must be strings")
+                
 
     @staticmethod
     def validate_scene(scene: Dict[str, Any]) -> None:

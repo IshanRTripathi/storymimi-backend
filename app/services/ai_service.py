@@ -3,6 +3,7 @@ import json
 import logging
 import asyncio
 from typing import Optional, Dict, Any
+from logging.handlers import RotatingFileHandler
 
 import httpx
 from app.config import settings
@@ -11,6 +12,16 @@ from app.services.story_prompt_service import StoryPromptService
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+# Set up a dedicated prompt log file
+prompt_log_file = 'logs/prompt_retries.log'
+prompt_logger = logging.getLogger('prompt_retries')
+prompt_logger.setLevel(logging.INFO)
+if not prompt_logger.handlers:
+    handler = RotatingFileHandler(prompt_log_file, maxBytes=2*1024*1024, backupCount=5)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    prompt_logger.addHandler(handler)
 
 class ElevenLabsTTSClient:
     """Modular ElevenLabs TTS client supporting v2 and v3, with robust error handling and logging."""
@@ -247,8 +258,26 @@ class AIService:
             logger.info("Using real scene moment generation via StoryPromptService")
             return await self.story_prompt_service.generate_scene_moment(scene_text)
 
+    async def _llm_rewrite_prompt(self, error_message: str, original_prompt: str) -> str:
+        """
+        Use the LLM to rewrite the prompt to avoid the error described in error_message.
+        """
+        from app.services.gemini_prompt_service import GeminiPromptService
+        gemini = GeminiPromptService(system_instruction="You are a prompt fixer. Return only a revised prompt that avoids the error described.")
+        fix_prompt = (
+            f"The following image prompt caused an error: {error_message}\n"
+            "Please rewrite the prompt to avoid this error. "
+            "Make it 100% safe for children, G-rated, and free of any inappropriate or ambiguous content. "
+            "Return only the revised prompt.\n"
+            f"Prompt: {original_prompt}"
+        )
+        prompt_logger.info(f"[LLM Prompt Rewrite] Reason: {error_message}\nOriginal Prompt: {original_prompt}\nFix Prompt: {fix_prompt}")
+        revised_prompt = await asyncio.to_thread(gemini.generate, fix_prompt)
+        prompt_logger.info(f"[LLM Prompt Rewrite] Revised Prompt: {revised_prompt}")
+        return revised_prompt
+
     async def generate_image(self, prompt: str, width: int = None, height: int = None, 
-                           steps: int = 4, seed: Optional[int] = None) -> bytes:
+                            steps: int = 4, seed: Optional[int] = None, max_retries: int = 3) -> bytes:
         """Generate an image using Together.ai with FLUX model
         
         Args:
@@ -273,6 +302,7 @@ class AIService:
 
         logger.debug(f"Generating image with prompt length: {len(prompt)}, dimensions: {width}x{height}")
         
+        safe_prompt = prompt + "\nThis image must be safe for children. No nudity, violence, or inappropriate content. G-rated. Wholesome. No NSFW elements."
         headers = {
             "Authorization": f"Bearer {settings.TOGETHER_API_KEY}",
             "Content-Type": "application/json"
@@ -280,7 +310,7 @@ class AIService:
         
         payload = {
             "model": settings.IMAGE_MODEL,
-            "prompt": prompt,
+            "prompt": safe_prompt,
             "width": width,
             "height": height,
             "steps": steps,
@@ -291,26 +321,39 @@ class AIService:
             payload["seed"] = seed
             logger.debug(f"Using seed: {seed} for image generation")
         
-        try:
-            logger.debug(f"Sending request to Together.ai API with model: {settings.IMAGE_MODEL}")
-            response = await self._call_api_with_retries("post", settings.TOGETHER_API_URL, headers=headers, json_data=payload)
-            
-            data = response.json()
-            logger.debug("Successfully received image data from Together.ai API")
-            
+        for attempt in range(max_retries):
             try:
-                image_data = base64.b64decode(data["data"][0].get("b64_json", ""))
-                if not image_data or len(image_data) < 100:
-                    logger.error("Invalid image data received from Together.ai API")
-                    raise ValueError("Invalid image data from API")
-                logger.debug(f"Successfully decoded image data, size: {len(image_data)} bytes")
-                return image_data
-            except Exception as decode_error:
-                logger.error(f"Failed to decode image data: {str(decode_error)}")
-                raise ValueError(f"Failed to decode image data: {str(decode_error)}") from decode_error
-        except Exception as e:
-            logger.error(f"Error generating image: {str(e)}", exc_info=True)
-            raise
+                logger.debug(f"Sending request to Together.ai API with model: {settings.IMAGE_MODEL}")
+                prompt_logger.info(f"[Image Gen Attempt] Attempt {attempt+1} - Prompt: {payload['prompt']}")
+                response = await self._call_api_with_retries("post", settings.TOGETHER_API_URL, headers=headers, json_data=payload)
+                
+                data = response.json()
+                logger.debug("Successfully received image data from Together.ai API")
+                
+                try:
+                    image_data = base64.b64decode(data["data"][0].get("b64_json", ""))
+                    if not image_data or len(image_data) < 100:
+                        logger.error("Invalid image data received from Together.ai API")
+                        raise ValueError("Invalid image data from API")
+                    logger.debug(f"Successfully decoded image data, size: {len(image_data)} bytes")
+                    return image_data
+                except Exception as decode_error:
+                    logger.error(f"Failed to decode image data: {str(decode_error)}")
+                    raise ValueError(f"Failed to decode image data: {str(decode_error)}") from decode_error
+            except httpx.HTTPStatusError as e:
+                error_text = e.response.text if e.response is not None else str(e)
+                logger.warning(f"[Image Prompt Error] Attempt {attempt+1}: {error_text}")
+                prompt_logger.warning(f"[Image Gen Retry] Attempt {attempt+1} - Reason: {error_text}\nPrompt: {payload['prompt']}")
+                if e.response is not None and e.response.status_code == 422:
+                    # Use LLM to rewrite prompt based on error
+                    safe_prompt = await self._llm_rewrite_prompt(error_text, safe_prompt)
+                    payload["prompt"] = safe_prompt
+                    continue
+                else:
+                    raise
+        logger.error("Failed to generate safe image after retries.")
+        prompt_logger.error(f"[Image Gen Failure] All retries failed for prompt: {payload['prompt']}")
+        raise
     
     async def generate_audio(self, text: str, voice_id: str = None) -> bytes:
         """Generate audio using ElevenLabs API (v2 or v3, feature-flagged)."""

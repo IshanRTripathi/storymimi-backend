@@ -188,7 +188,7 @@ TASK:
 Ensure all fields are present and follow these requirements:
 - scene_count [min:3, max:6]
 - age [3,6]
-- text [500-800 words per scene]
+- text [150-250 words per scene]
 - accessories [headband, headphones, glasses, bangles, bracelet, watch]
 - side_character [animal, bird, fairy, robot, balloon]
 - value_to_teach [kindness, empathy, thoughtfulness, love, extrovert]

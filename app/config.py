@@ -10,7 +10,9 @@ class Settings(BaseSettings):
     
     # AI Service Configuration
     OPENROUTER_API_KEY: str
+    LLM_BACKEND: str = "gemini"
     GEMINI_API_KEY: str
+    GEMINI_MODEL: str = "gemini-2.0-flash"
     TOGETHER_API_KEY: str
     ELEVENLABS_API_KEY: str
     ELEVENLABS_VOICE_ID: str
