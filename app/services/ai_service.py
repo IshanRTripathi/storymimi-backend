@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any
 from logging.handlers import RotatingFileHandler
 
 import httpx
-from app.config import settings
+from app.core.config.settings import settings
 from app.services.story_prompt_service import StoryPromptService
 from app.services.gemini_prompt_service import GeminiPromptService
 from app.services.openrouter_service import OpenRouterService  # New modular service

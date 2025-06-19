@@ -1,7 +1,7 @@
 import uvicorn
 import logging
 import sys
-from app.config import settings, refresh_settings
+from app.core.config.settings import settings, refresh_settings
 import os
 
 # Configure logging for the server startup

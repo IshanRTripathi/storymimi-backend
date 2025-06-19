@@ -27,7 +27,7 @@ class Scene(BaseModel):
     sequence: int = Field(info={"description": "Sequence number of the scene in the story"})
     title: str = Field(min_length=1, max_length=200, info={"description": "Scene title"})
     text: str = Field(min_length=1, max_length=5000, info={"description": "Scene text"})
-    image_prompt: str = Field(min_length=1, max_length=3000, info={"description": "Prompt for generating scene image"})
+    image_prompt: str = Field(min_length=1, info={"description": "Prompt for generating scene image"})
     image_url: Optional[str] = Field(
         default=None,
         pattern=r'^https?://[\w.-]+(?:/[\w.-]*)*\??$',

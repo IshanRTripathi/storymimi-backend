@@ -1,6 +1,6 @@
 import logging
 from supabase import create_client
-from app.config import settings
+from app.core.config.settings import settings
 from typing import Any, Dict, Optional, Union
 import time
 import uuid

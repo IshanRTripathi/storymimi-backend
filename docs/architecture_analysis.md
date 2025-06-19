@@ -56,7 +56,7 @@ This document provides a comprehensive analysis of the StoryMimi backend archite
 The application uses Supabase as its database and storage solution, with a well-structured repository pattern:
 
 ### Base Client
-- `base_db_client.py` provides:
+- `base_client.py` provides:
   - Common initialization for Supabase client
   - Logging utilities for database operations
   - Connection pool management

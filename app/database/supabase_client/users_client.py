@@ -23,7 +23,7 @@ import logging
 import time
 import uuid
 
-from app.database.supabase_client.base_db_client import SupabaseBaseClient
+from app.database.supabase_client.base_client import SupabaseBaseClient
 from app.models.user import User, UserResponse
 
 logger = logging.getLogger(__name__)

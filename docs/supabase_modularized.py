@@ -1,7 +1,7 @@
 # base.py
 import logging
 from supabase import create_client
-from app.config import settings
+from app.core.config.settings import settings
 
 logger = logging.getLogger(__name__)
 

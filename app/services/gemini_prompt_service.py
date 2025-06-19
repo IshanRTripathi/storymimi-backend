@@ -1,7 +1,7 @@
 import google.generativeai as genai
 import os
 import logging
-from app.config import settings
+from app.core.config.settings import settings
 
 logger = logging.getLogger(__name__)
 

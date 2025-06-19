@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from typing import Dict, Any
-from app.config import settings
+from app.core.config.settings import settings
 
 logger = logging.getLogger(__name__)
 

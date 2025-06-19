@@ -23,10 +23,10 @@ from app.database.supabase_client import (
 ## File Structure and Usage
 
 ### Base Client
-- `base_db_client.py`: Contains the base client class and common utilities
+- `base_client.py`: Contains the base client class and common utilities
 - Common imports:
   ```python
-  from app.database.supabase_client.base_db_client import SupabaseBaseClient
+  from app.database.supabase_client.base_client import SupabaseBaseClient
   ```
 - Usage:
   ```python

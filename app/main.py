@@ -7,7 +7,7 @@ import os
 import logging
 import sys
 
-from app.config import settings
+from app.core.config.settings import settings
 from app.api import stories, users
 
 # Configure logging

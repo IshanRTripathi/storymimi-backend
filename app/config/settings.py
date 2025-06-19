@@ -1,1 +1,0 @@
-LLM_BACKEND: str = "openrouter"  # or "gemini" 

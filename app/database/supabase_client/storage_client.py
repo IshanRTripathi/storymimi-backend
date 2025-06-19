@@ -4,12 +4,12 @@ from typing import Dict, List, Optional, Any, Union, Tuple
 from datetime import datetime
 from pathlib import Path
 import asyncio
-from app.database.supabase_client.base_db_client import SupabaseBaseClient
+from app.database.supabase_client.base_client import SupabaseBaseClient
 import logging
 import time
 from supabase import create_client, Client
 import functools
-from app.config import settings
+from app.core.config.settings import settings   
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,6 @@ class StorageService(SupabaseBaseClient):
     
     def __init__(self, supabase_url: Optional[str] = None, supabase_key: Optional[str] = None):
         """Initialize the storage service with Supabase credentials."""
-        from app.config import settings
         self.supabase_url = supabase_url or settings.SUPABASE_URL
         self.supabase_key = supabase_key or settings.SUPABASE_KEY
         self.client = create_client(self.supabase_url, self.supabase_key)

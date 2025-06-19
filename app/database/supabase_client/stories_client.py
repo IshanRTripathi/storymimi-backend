@@ -2,7 +2,7 @@ from typing import Dict, Optional, Any, Union, List
 from uuid import UUID
 from datetime import datetime
 
-from app.database.supabase_client.base_db_client import SupabaseBaseClient
+from app.database.supabase_client.base_client import SupabaseBaseClient
 from app.models.story_types import StoryStatus
 
 import logging

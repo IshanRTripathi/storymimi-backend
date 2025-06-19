@@ -1,11 +1,11 @@
 """Supabase client package"""
 
-from .base_db_client import SupabaseBaseClient
-from .users_db_client import UserRepository
-from .stories_db_client import StoryRepository
-from .scenes_db_client import SceneRepository
-from .storage_db_client import StorageService
-from .health_db_client import SupabaseHealthService
+from .base_client import SupabaseBaseClient
+from .users_client import UserRepository
+from .stories_client import StoryRepository
+from .scenes_client import SceneRepository
+from .storage_client import StorageService
+from .health_client import SupabaseHealthService
 
 __all__ = [
     "SupabaseBaseClient",

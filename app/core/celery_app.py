@@ -1,5 +1,5 @@
 from celery import Celery
-from app.config import settings
+from app.core.config.settings import settings
 import logging
 
 # Configure logging for Celery

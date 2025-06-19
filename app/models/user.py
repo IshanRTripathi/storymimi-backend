@@ -16,6 +16,11 @@ class UserCreate(BaseModel):
     email: EmailStr = Field(..., description="User's email address")
     username: str = Field(..., description="User's username")
 
+class UserUpdate(BaseModel):
+    """Model for updating a user"""
+    email: Optional[EmailStr] = Field(None, description="User's email address")
+    username: Optional[str] = Field(None, description="User's username")
+
 class UserResponse(BaseModel):
     """Response model for user data"""
     user_id: UUID = Field(..., description="Unique identifier for the user")

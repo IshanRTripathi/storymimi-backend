@@ -6,7 +6,7 @@ import os
 import requests
 from typing import Any, Dict, Optional, Union
 import httpx
-from app.config import settings
+from app.core.config.settings import settings
 from app.models.story_types import StoryRequest, Scene
 from app.utils.json_sanitizer import validate_and_parse_llm_json, retry_on_json_error, validate_json_structure, robust_llm_schema_parse, repair_json_with_json_repair
 import base64
@@ -167,7 +167,7 @@ class StoryPromptService:
         prompt = f"{base_style}. {scene_desc}. {characters}. {atmosphere}. {technical}"
         # Get model-specific and Scene model limits
         model_limits = get_model_limits(model_name)
-        scene_model_max = Scene.model_fields['image_prompt'].max_length or 3000
+        scene_model_max = Scene.model_fields['image_prompt'].max_length
         # Enforce the stricter of the two limits
         hard_limit = min(model_limits['max_length'], scene_model_max)
         if len(prompt) > hard_limit:

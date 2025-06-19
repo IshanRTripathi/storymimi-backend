@@ -32,12 +32,12 @@ COPY run.py worker.py ./
 COPY .env.example ./
 COPY README.md ./
 
-# Expose FastAPI port
-EXPOSE 8000
+# Expose the port the app runs on
+EXPOSE 8080
 
-# Healthcheck for FastAPI
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl --fail http://localhost:8000/health || exit 1
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s \
+  CMD curl --fail http://localhost:8080/health || exit 1
 
 # Default to non-root user
 USER storymimi
