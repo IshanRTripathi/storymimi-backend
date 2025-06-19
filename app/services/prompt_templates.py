@@ -18,7 +18,7 @@ STORY_STRUCTURE = {
             "hair_style": str,
             "hair_length": str,
             "hair_color": str,
-            "accessories": list,
+            "accessory": str,
             "clothing": {
                 "top": str,
                 "bottom": str,
@@ -155,7 +155,7 @@ You are a seasoned children's story writer and data extractor.
 
 TASK:
 1. Convert user input into structured JSON with:
-   - child_profile: name, age, gender, personality (list), fears (list), favorites {{"animal", "color", "toy"}}, physical_appearance {{"height", "build", "skin_tone", "hair_style", "hair_length", "hair_color", "accessories", "clothing {{"top", "bottom", "shoes"}}}}
+   - child_profile: name, age, gender, personality (list), fears (list), favorites {{"animal", "color", "toy"}}, physical_appearance {{"height", "build", "skin_tone", "hair_style", "hair_length", "hair_color", "accessory", "clothing {{"top", "bottom", "shoes"}}}}
    - side_character: exists (true/false), description, relationship_to_main, growth_arc
    - story_meta: {{
        "value_to_teach": string,
@@ -189,9 +189,9 @@ Ensure all fields are present and follow these requirements:
 - scene_count [min:3, max:6]
 - age [3,6]
 - text [150-250 words per scene]
-- accessories [headband, headphones, glasses, bangles, bracelet, watch]
-- side_character [animal, bird, fairy, robot, balloon]
-- value_to_teach [kindness, empathy, thoughtfulness, love, extrovert]
+- accessory only one of [headband, headphones, glasses, bangles, bracelet, watch, etc]
+- side_character only one of [animal, bird, fairy, balloon, etc]
+- value_to_teach [kindness, empathy, thoughtfulness, love, extrovert, etc]
 - readability_score must be age-appropriate
 - vocabulary_highlights should include 3-5 age-appropriate words per scene
 - emotional_arc must show clear progression

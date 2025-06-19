@@ -60,7 +60,6 @@ class StoryPromptService:
                                           json=payload)
                     resp.raise_for_status()
                     logger.info(f"[✅ LLM Attempt {attempt} success] Response received from {model}")
-                    log_llm_response('call_llm', prompt, str(resp.json()))
                     return resp.json()
                 except (httpx.RequestError, httpx.HTTPStatusError) as e:
                     logger.warning(f"[LLM Retry {attempt}] Error: {str(e)}, retrying {model} in {backoff}s...")
@@ -93,7 +92,6 @@ class StoryPromptService:
         prompt = STORY_PROMPT_TEMPLATE.format(user_input=user_input)
         response = await self._call_llm(prompt, self.story_model)
         content = response["choices"][0]["message"]["content"]
-        log_llm_response('generate_structured_story', prompt, repair_json_with_json_repair(str(content)))
         story_data = await robust_llm_schema_parse(content, STORY_STRUCTURE, self._llm_fix_json)
         return story_data
 
@@ -104,7 +102,6 @@ class StoryPromptService:
         prompt = VISUAL_PROFILE_PROMPT_TEMPLATE.format(character_json=json.dumps(data))
         response = await self._call_llm(prompt, self.visual_profile_model)
         content = response["choices"][0]["message"]["content"]
-        log_llm_response('generate_visual_profile', prompt, repair_json_with_json_repair(str(content)))
         visual_profile_json = validate_and_parse_llm_json(content)
         validate_json_structure(visual_profile_json, VISUAL_PROFILE_STRUCTURE)
         return visual_profile_json
@@ -115,7 +112,6 @@ class StoryPromptService:
         prompt = BASE_STYLE_PROMPT_TEMPLATE.format(setting=setting, tone=tone)
         response = await self._call_llm(prompt, self.base_style_model)
         content = response["choices"][0]["message"]["content"]
-        log_llm_response('generate_base_style', prompt, repair_json_with_json_repair(str(content)))
         base_style_json = validate_and_parse_llm_json(content)
         validate_json_structure(base_style_json, BASE_STYLE_STRUCTURE)
         # Format the base style into a descriptive string
@@ -134,7 +130,6 @@ class StoryPromptService:
         prompt = SCENE_MOMENT_PROMPT_TEMPLATE.format(scene_text=scene_text, story_so_far=story_so_far)
         response = await self._call_llm(prompt, self.scene_moment_model)
         content = response["choices"][0]["message"]["content"]
-        log_llm_response('generate_scene_moment', prompt, repair_json_with_json_repair(str(content)))
         scene_moment_json = validate_and_parse_llm_json(content)
         validate_json_structure(scene_moment_json, SCENE_MOMENT_STRUCTURE)
         # Format the scene moment into a descriptive string
