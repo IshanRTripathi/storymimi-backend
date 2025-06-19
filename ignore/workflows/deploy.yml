@@ -8,12 +8,25 @@ on:
   workflow_dispatch:
 
 env:
+  # GCP Configuration
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1
   REPO: storymimi-repo
   API_SERVICE: storymimi-api
   WORKER_SERVICE: storymimi-worker
   REDIS_INSTANCE: storymimi-redis
+  
+  # Application Configuration
+  DEBUG: false
+  HOST: 0.0.0.0
+  PORT: 8080
+  
+  # AI Service URLs and Models (non-sensitive)
+  OPENROUTER_BASE_URL: ${{ vars.OPENROUTER_BASE_URL }}
+  QWEN_MODEL_NAME: ${{ vars.QWEN_MODEL_NAME }}
+  TOGETHER_BASE_URL: ${{ vars.TOGETHER_BASE_URL }}
+  FLUX_MODEL_NAME: ${{ vars.FLUX_MODEL_NAME }}
+  ELEVENLABS_USE_V3: ${{ vars.ELEVENLABS_USE_V3 }}
 
 jobs:
   deploy:
@@ -70,6 +83,15 @@ jobs:
           region: ${{ env.REGION }}
           image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/api:${{ github.sha }}
           env_vars: |
+            DEBUG=${{ env.DEBUG }}
+            HOST=${{ env.HOST }}
+            PORT=${{ env.PORT }}
+            OPENROUTER_BASE_URL=${{ env.OPENROUTER_BASE_URL }}
+            QWEN_MODEL_NAME=${{ env.QWEN_MODEL_NAME }}
+            TOGETHER_BASE_URL=${{ env.TOGETHER_BASE_URL }}
+            FLUX_MODEL_NAME=${{ env.FLUX_MODEL_NAME }}
+            ELEVENLABS_USE_V3=${{ env.ELEVENLABS_USE_V3 }}
+          secrets: |
             REDIS_URL=${{ secrets.REDIS_URL }}
             SUPABASE_URL=${{ secrets.SUPABASE_URL }}
             SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
@@ -94,6 +116,15 @@ jobs:
           region: ${{ env.REGION }}
           image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/worker:${{ github.sha }}
           env_vars: |
+            DEBUG=${{ env.DEBUG }}
+            HOST=${{ env.HOST }}
+            PORT=${{ env.PORT }}
+            OPENROUTER_BASE_URL=${{ env.OPENROUTER_BASE_URL }}
+            QWEN_MODEL_NAME=${{ env.QWEN_MODEL_NAME }}
+            TOGETHER_BASE_URL=${{ env.TOGETHER_BASE_URL }}
+            FLUX_MODEL_NAME=${{ env.FLUX_MODEL_NAME }}
+            ELEVENLABS_USE_V3=${{ env.ELEVENLABS_USE_V3 }}
+          secrets: |
             REDIS_URL=${{ secrets.REDIS_URL }}
             SUPABASE_URL=${{ secrets.SUPABASE_URL }}
             SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
