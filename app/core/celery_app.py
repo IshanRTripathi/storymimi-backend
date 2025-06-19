@@ -25,6 +25,45 @@ celery_app.conf.update(
     task_time_limit=3600,  # 1 hour time limit for tasks
     worker_max_tasks_per_child=200,  # Restart worker after 200 tasks
     broker_connection_retry_on_startup=True,
+    
+    # Redis connection settings for better reliability
+    broker_connection_retry=True,
+    broker_connection_max_retries=10,
+    broker_connection_retry_delay=1.0,
+    broker_heartbeat=30,
+    broker_pool_limit=10,
+    
+    # Result backend connection settings
+    result_backend_transport_options={
+        'visibility_timeout': 3600,
+        'retry_on_timeout': True,
+        'socket_keepalive': True,
+        'socket_keepalive_options': {
+            'TCP_KEEPINTVL': 1,
+            'TCP_KEEPCNT': 3,
+            'TCP_KEEPIDLE': 1,
+        },
+        'health_check_interval': 30,
+    },
+    
+    # Broker transport options for Redis
+    broker_transport_options={
+        'visibility_timeout': 3600,
+        'retry_on_timeout': True,
+        'socket_keepalive': True,
+        'socket_keepalive_options': {
+            'TCP_KEEPINTVL': 1,
+            'TCP_KEEPCNT': 3,
+            'TCP_KEEPIDLE': 1,
+        },
+        'health_check_interval': 30,
+    },
+    
+    # Task settings
+    task_acks_late=True,
+    worker_prefetch_multiplier=1,
+    task_reject_on_worker_lost=True,
+    
     # Set worker log level to INFO
     worker_log_format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     worker_task_log_format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",

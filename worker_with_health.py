@@ -46,12 +46,21 @@ def run_celery_worker():
     logger.info("Starting Celery worker...")
     try:
         from app.core.celery_app import celery_app
-        celery_app.worker_main([
+        
+        # Set additional worker options for better connection handling
+        worker_options = [
             'worker',
             '--loglevel=info',
             '--concurrency=2',
-            '--max-tasks-per-child=200'
-        ])
+            '--max-tasks-per-child=200',
+            '--heartbeat-interval=30',
+            '--without-gossip',
+            '--without-mingle',
+            '--pool=prefork'
+        ]
+        
+        logger.info(f"Starting Celery worker with options: {worker_options}")
+        celery_app.worker_main(worker_options)
     except Exception as e:
         logger.error(f"Celery worker error: {e}")
         raise
