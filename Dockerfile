@@ -28,7 +28,7 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 # Copy only necessary files
 COPY app/ ./app/
 COPY static/ ./static/
-COPY run.py worker.py ./
+COPY run.py worker.py worker_with_health.py ./
 COPY .env.example ./
 COPY README.md ./
 
