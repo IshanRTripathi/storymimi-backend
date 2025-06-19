@@ -38,6 +38,9 @@ class StoryService:
                 logger.error("Failed to create story record in database")
                 raise Exception("Failed to create story record")
 
+            # Debug: Log what we got from the database
+            logger.info(f"Database returned story: {story}")
+            
             story_id = story["story_id"]
             logger.info(f"Story record created with ID: {story_id}")
             
@@ -49,24 +52,33 @@ class StoryService:
                 "user_id": request.user_id
             }, is_initial_creation=True)
 
-            logger.debug(f"Dispatching story generation task to Celery for story ID: {story_id}")
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None,  # Use default executor
-                generate_story_task.delay,
-                story_id,
-                request.dict(),
-                request.user_id
-            )
-            logger.info(f"Story generation task dispatched for story ID: {story_id}")
+            # Try to dispatch Celery task, but don't fail if it doesn't work
+            try:
+                logger.debug(f"Dispatching story generation task to Celery for story ID: {story_id}")
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(
+                    None,  # Use default executor
+                    generate_story_task.delay,
+                    story_id,
+                    request.dict(),
+                    request.user_id
+                )
+                logger.info(f"Story generation task dispatched for story ID: {story_id}")
+            except Exception as celery_error:
+                logger.warning(f"Failed to dispatch Celery task for story {story_id}: {str(celery_error)}")
+                logger.info(f"Story created successfully but task dispatch failed - story will remain in PENDING status")
 
+            # Return the complete story data from database (includes created_at, updated_at)
             response = {
-                "status": StoryStatus.PENDING,
-                "story_id": story_id,
-                "title": request.title,
-                "user_id": request.user_id
+                "status": story["status"],
+                "story_id": story["story_id"],
+                "title": story["title"],
+                "user_id": story["user_id"],
+                "created_at": story["created_at"],
+                "updated_at": story["updated_at"]
             }
-            return JSONConverter.from_story_response(response)
+            logger.info(f"Returning response: {response}")
+            return response
         except Exception as e:
             logger.exception(f"Error creating story: {str(e)}")
             raise

@@ -37,7 +37,26 @@ async def create_story(
         Validator.validate_model_data(result, is_initial_creation=True)
         
         logger.info(f"Story created successfully with ID: {result['story_id']}")
-        response = JSONConverter.parse_json(result, StoryResponse)
+        
+        # Parse datetime strings to datetime objects if they are strings
+        created_at = result["created_at"]
+        if isinstance(created_at, str):
+            created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+        
+        updated_at = result["updated_at"]
+        if isinstance(updated_at, str):
+            updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
+        
+        # Create StoryResponse directly from the result
+        response = StoryResponse(
+            status=result["status"],
+            title=result["title"],
+            story_id=result["story_id"],
+            user_id=result["user_id"],
+            created_at=created_at,
+            updated_at=updated_at,
+            error=None
+        )
         return response
     except Exception as e:
         logger.error(f"Error creating story: {str(e)}", exc_info=True)
