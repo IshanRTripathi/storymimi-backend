@@ -39,10 +39,11 @@ availableSecrets:
 ```
 
 ### Service Deployment
-Both API and worker services are configured with:
+Both API and worker services are deployed as Cloud Run services with:
 - `secretEnv` - Makes secrets available to the build step
 - `--update-secrets` - Configures Cloud Run services to access secrets
 - `--set-env-vars` - Sets non-sensitive environment variables
+- `--command` - For worker: runs Celery worker instead of the default FastAPI server
 
 ## Permissions
 
@@ -85,8 +86,9 @@ echo 'your-openrouter-key' | gcloud secrets versions add OPENROUTER_API_KEY --da
 
 1. **Build Trigger**: Push to GitHub triggers Cloud Build
 2. **Secret Access**: Cloud Build accesses secrets during deployment
-3. **Service Update**: Both API and worker services are updated with new secrets
-4. **Automatic Restart**: Services restart with new configuration
+3. **API Service**: Deploys `storymimi-api` as a public Cloud Run service
+4. **Worker Service**: Deploys `storymimi-worker` as a private Cloud Run service running Celery
+5. **Automatic Restart**: Both services restart with new configuration and secrets
 
 ## Security Benefits
 
