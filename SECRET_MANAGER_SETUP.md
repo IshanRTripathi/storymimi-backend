@@ -110,73 +110,103 @@ This solves the issue where Cloud Run expects HTTP responses but Celery workers 
 
 ## Troubleshooting
 
-### Build Fails with Secret Access Error
-1. Verify the secret exists: `gcloud secrets list`
-2. Check service account permissions: Cloud Build SA needs `secretmanager.secretAccessor`
-3. Verify secret names match exactly in `cloudbuild.yaml`
+### Celery 5.x Redis Reconnection Bug - CRITICAL FIX
 
-### Service Deployment Fails
-1. Check Cloud Run service has permission to access secrets
-2. Verify VPC connector exists: `storymimi-connector`
-3. Check logs: `gcloud logging read "resource.type=cloud_run_revision"`
+**Problem**: This is a well-known bug in Celery 5.x where workers stop consuming tasks after Redis reconnection. Symptoms include:
+```
+Connection to Redis lost: Retry (6/20) in 1.00 second.
+worker: Warm shutdown (MainProcess)
+```
+After Redis reconnection, workers appear healthy but stop processing tasks indefinitely.
 
-### Missing Environment Variables
-1. Verify secrets have values: `gcloud secrets versions list SECRET_NAME`
-2. Check service configuration: `gcloud run services describe SERVICE_NAME`
+**Root Cause**: 
+- Bug in Celery 5.x mingle/gossip/heartbeat mechanism with Redis
+- Worker gets stuck after Redis connection drops and reconnects
+- Affects all Celery 5.x versions with Redis broker
+
+**Solution Implemented**: Multi-layered fix addressing all aspects of the bug:
+
+#### 1. Worker Command Line Flags (MOST CRITICAL)
+```bash
+celery worker \
+  --without-mingle \      # CRITICAL: Prevents reconnection freeze
+  --without-gossip \      # CRITICAL: Prevents reconnection freeze  
+  --without-heartbeat \   # CRITICAL: Prevents heartbeat issues
+  --pool=prefork \        # Better stability
+  --optimization=fair     # Fair task distribution
+```
+
+#### 2. Enhanced Redis Connection Configuration
+```python
+broker_transport_options={
+    'visibility_timeout': 7200,        # 2 hours (longer than task timeout)
+    'socket_timeout': 120.0,           # 2 minutes socket timeout
+    'socket_connect_timeout': 30.0,    # 30 seconds connect timeout
+    'socket_keepalive': True,
+    'socket_keepalive_options': {
+        'TCP_KEEPINTVL': 10,           # Keepalive probe interval
+        'TCP_KEEPCNT': 6,              # Max keepalive probes
+        'TCP_KEEPIDLE': 60,            # Idle time before keepalive
+    },
+    'health_check_interval': 25,       # Health check frequency
+    'max_connections': 20,             # Connection pool size
+}
+```
+
+#### 3. Connection Retry Settings
+```python
+broker_connection_retry=True,
+broker_connection_max_retries=None,   # Retry indefinitely
+broker_connection_retry_delay=5.0,    # 5 second delay between retries
+```
+
+#### 4. Task Reliability Settings
+```python
+task_acks_late=True,                  # Acknowledge after completion
+worker_prefetch_multiplier=1,         # One task per worker
+task_reject_on_worker_lost=True,      # Reject tasks if worker lost
+worker_cancel_long_running_tasks_on_connection_loss=True,
+```
+
+**References**: 
+- [Celery GitHub Issue #7276](https://github.com/celery/celery/discussions/7276)
+- Affects: Celery 5.0+, Redis broker, all deployment environments
+- Status: Fixed in our implementation, monitoring for Celery 5.4+ official fix
+
+**Verification**: 
+- Monitor worker logs for task processing after Redis restarts
+- Check that tasks are consumed within expected timeframes
+- Verify no "warm shutdown" messages after Redis reconnections
 
 ### Redis Connection Issues
 
-**Problem**: Celery worker connects to Redis initially but then loses connection with errors like:
-```
-Connection to Redis lost: Retry (0/20) now.
-worker: Warm shutdown (MainProcess)
-```
-
-**Root Cause**: Redis connection timeouts, lack of connection pooling, and inadequate retry logic.
+**Problem**: Redis connection timeouts, lack of connection pooling, and inadequate retry logic.
 
 **Solution**: Enhanced Celery configuration with:
-- **Connection Retry**: `broker_connection_retry=True` with 10 max retries
-- **Heartbeat**: 30-second heartbeat to keep connections alive  
+- **Connection Retry**: `broker_connection_retry=True` with indefinite retries
 - **Socket Keep-Alive**: TCP keep-alive options for persistent connections
 - **Connection Pooling**: Limited pool size to prevent connection exhaustion
 - **Task Acknowledgment**: Late acknowledgment (`task_acks_late=True`) for reliability
-- **Worker Options**: `--without-gossip --without-mingle` to reduce network overhead
+- **Worker Options**: `--without-gossip --without-mingle --without-heartbeat` for stability
 
-**Configuration Applied**:
-```python
-# In app/core/celery_app.py
-celery_app.conf.update(
-    broker_connection_retry=True,
-    broker_connection_max_retries=10,
-    broker_heartbeat=30,
-    broker_pool_limit=10,
-    task_acks_late=True,
-    worker_prefetch_multiplier=1,
-    broker_transport_options={
-        'socket_keepalive': True,
-        'health_check_interval': 30,
-    }
-)
-```
+### Build and Deployment Issues
 
-### Testing Redis Connection
+**Problem**: Cloud Build failures, missing files, or service deployment errors.
 
-Use the provided test script to verify connectivity:
-```bash
-python test_redis_connection.py
-```
+**Solution**: 
+- Verify all required files are copied in Dockerfile
+- Check Cloud Build service account permissions
+- Ensure Secret Manager secrets are properly configured
+- Validate VPC connector and Redis connectivity
 
-This will test:
-1. Direct Redis connection
-2. Celery broker connection  
-3. Task dispatch functionality
+### Health Check Failures
 
-### Common Issues
+**Problem**: Cloud Run health checks failing for worker service.
 
-1. **Cross-Region Latency**: Ensure Redis and Cloud Run services are in the same region
-2. **VPC Connector**: Verify VPC connector is properly configured and in READY state
-3. **Firewall Rules**: Check that Redis port (6379) is accessible through VPC
-4. **Memory Limits**: Ensure Redis instance has sufficient memory for task queues
+**Solution**: 
+- Worker includes HTTP health check server on port 8080
+- Health endpoint responds at `/health` and `/`
+- Daemon thread runs health server alongside Celery worker
 
 ## Next Steps
 

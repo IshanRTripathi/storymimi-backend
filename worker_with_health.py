@@ -47,19 +47,21 @@ def run_celery_worker():
     try:
         from app.core.celery_app import celery_app
         
-        # Set additional worker options for better connection handling
+        # CRITICAL: Worker options to fix Redis reconnection bug in Celery 5.x
+        # --without-mingle and --without-gossip are essential to prevent task consumption freeze
         worker_options = [
             'worker',
             '--loglevel=info',
             '--concurrency=2',
-            '--max-tasks-per-child=200',
-            '--heartbeat-interval=30',
-            '--without-gossip',
-            '--without-mingle',
-            '--pool=prefork'
+            '--max-tasks-per-child=1000',
+            '--without-mingle',      # CRITICAL: Prevents Redis reconnection bug
+            '--without-gossip',      # CRITICAL: Prevents Redis reconnection bug  
+            '--without-heartbeat',   # CRITICAL: Prevents heartbeat-related connection issues
+            '--pool=prefork',        # Use prefork pool for better stability
+            '--optimization=fair',   # Fair task distribution
         ]
         
-        logger.info(f"Starting Celery worker with options: {worker_options}")
+        logger.info(f"Starting Celery worker with Redis reconnection bug fixes: {worker_options}")
         celery_app.worker_main(worker_options)
     except Exception as e:
         logger.error(f"Celery worker error: {e}")

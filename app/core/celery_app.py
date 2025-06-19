@@ -14,7 +14,7 @@ celery_app = Celery(
     backend=settings.REDIS_URL
 )
 
-# Configure Celery
+# Configure Celery with Redis reconnection bug fixes
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
@@ -23,51 +23,58 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     task_time_limit=3600,  # 1 hour time limit for tasks
-    worker_max_tasks_per_child=200,  # Restart worker after 200 tasks
+    worker_max_tasks_per_child=1000,  # Restart worker after 1000 tasks
+    
+    # CRITICAL: Connection retry settings for Redis reconnection bug
     broker_connection_retry_on_startup=True,
-    
-    # Redis connection settings for better reliability
     broker_connection_retry=True,
-    broker_connection_max_retries=10,
-    broker_connection_retry_delay=1.0,
-    broker_heartbeat=30,
-    broker_pool_limit=10,
+    broker_connection_max_retries=None,  # Retry indefinitely
+    broker_connection_retry_delay=5.0,   # Wait 5 seconds between retries
     
-    # Result backend connection settings
-    result_backend_transport_options={
-        'visibility_timeout': 3600,
-        'retry_on_timeout': True,
-        'socket_keepalive': True,
-        'socket_keepalive_options': {
-            'TCP_KEEPINTVL': 1,
-            'TCP_KEEPCNT': 3,
-            'TCP_KEEPIDLE': 1,
-        },
-        'health_check_interval': 30,
-    },
-    
-    # Broker transport options for Redis
+    # Redis transport options - CRITICAL for connection stability
     broker_transport_options={
-        'visibility_timeout': 3600,
+        'visibility_timeout': 7200,      # 2 hours - longer than task timeout
         'retry_on_timeout': True,
+        'socket_timeout': 120.0,         # 2 minutes socket timeout
+        'socket_connect_timeout': 30.0,  # 30 seconds connect timeout
         'socket_keepalive': True,
         'socket_keepalive_options': {
-            'TCP_KEEPINTVL': 1,
-            'TCP_KEEPCNT': 3,
-            'TCP_KEEPIDLE': 1,
+            'TCP_KEEPINTVL': 10,         # Send keepalive probes every 10 seconds
+            'TCP_KEEPCNT': 6,            # Send up to 6 keepalive probes
+            'TCP_KEEPIDLE': 60,          # Start keepalive after 60 seconds idle
         },
-        'health_check_interval': 30,
+        'health_check_interval': 25,     # Health check every 25 seconds
+        'max_connections': 20,           # Connection pool size
     },
     
-    # Task settings
-    task_acks_late=True,
-    worker_prefetch_multiplier=1,
-    task_reject_on_worker_lost=True,
+    # Result backend transport options
+    result_backend_transport_options={
+        'retry_on_timeout': True,
+        'socket_timeout': 120.0,
+        'socket_connect_timeout': 30.0,
+        'socket_keepalive': True,
+        'socket_keepalive_options': {
+            'TCP_KEEPINTVL': 10,
+            'TCP_KEEPCNT': 6,
+            'TCP_KEEPIDLE': 60,
+        },
+        'health_check_interval': 25,
+        'max_connections': 20,
+    },
     
-    # Set worker log level to INFO
+    # Task settings for reliability
+    task_acks_late=True,                 # Acknowledge after task completion
+    worker_prefetch_multiplier=1,        # Prefetch only 1 task per worker
+    task_reject_on_worker_lost=True,     # Reject tasks if worker is lost
+    
+    # Worker settings
+    worker_disable_rate_limits=True,     # Disable rate limiting
     worker_log_format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     worker_task_log_format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    worker_log_color=False,  # Disable color for better log filtering
+    worker_log_color=False,
+    
+    # CRITICAL: Settings to prevent the Redis reconnection bug
+    worker_cancel_long_running_tasks_on_connection_loss=True,  # Cancel tasks on connection loss
 )
 
 # Configure Celery to automatically discover tasks
