@@ -124,6 +124,60 @@ This solves the issue where Cloud Run expects HTTP responses but Celery workers 
 1. Verify secrets have values: `gcloud secrets versions list SECRET_NAME`
 2. Check service configuration: `gcloud run services describe SERVICE_NAME`
 
+### Redis Connection Issues
+
+**Problem**: Celery worker connects to Redis initially but then loses connection with errors like:
+```
+Connection to Redis lost: Retry (0/20) now.
+worker: Warm shutdown (MainProcess)
+```
+
+**Root Cause**: Redis connection timeouts, lack of connection pooling, and inadequate retry logic.
+
+**Solution**: Enhanced Celery configuration with:
+- **Connection Retry**: `broker_connection_retry=True` with 10 max retries
+- **Heartbeat**: 30-second heartbeat to keep connections alive  
+- **Socket Keep-Alive**: TCP keep-alive options for persistent connections
+- **Connection Pooling**: Limited pool size to prevent connection exhaustion
+- **Task Acknowledgment**: Late acknowledgment (`task_acks_late=True`) for reliability
+- **Worker Options**: `--without-gossip --without-mingle` to reduce network overhead
+
+**Configuration Applied**:
+```python
+# In app/core/celery_app.py
+celery_app.conf.update(
+    broker_connection_retry=True,
+    broker_connection_max_retries=10,
+    broker_heartbeat=30,
+    broker_pool_limit=10,
+    task_acks_late=True,
+    worker_prefetch_multiplier=1,
+    broker_transport_options={
+        'socket_keepalive': True,
+        'health_check_interval': 30,
+    }
+)
+```
+
+### Testing Redis Connection
+
+Use the provided test script to verify connectivity:
+```bash
+python test_redis_connection.py
+```
+
+This will test:
+1. Direct Redis connection
+2. Celery broker connection  
+3. Task dispatch functionality
+
+### Common Issues
+
+1. **Cross-Region Latency**: Ensure Redis and Cloud Run services are in the same region
+2. **VPC Connector**: Verify VPC connector is properly configured and in READY state
+3. **Firewall Rules**: Check that Redis port (6379) is accessible through VPC
+4. **Memory Limits**: Ensure Redis instance has sufficient memory for task queues
+
 ## Next Steps
 
 1. **Add Secret Values**: Use the commands above to add actual API keys
@@ -138,3 +192,23 @@ This solves the issue where Cloud Run expects HTTP responses but Celery workers 
 3. **Least Privilege**: Only grant necessary permissions
 4. **Backup Secrets**: Keep secure backups of critical API keys
 5. **Environment Separation**: Use different secrets for dev/staging/prod 
+
+## Maintenance
+
+### Updating Secret Values
+```bash
+# Update a secret value
+echo 'new-secret-value' | gcloud secrets versions add SECRET_NAME --data-file=-
+
+# List secret versions
+gcloud secrets versions list SECRET_NAME
+
+# Access specific version
+gcloud secrets versions access VERSION_NUMBER --secret=SECRET_NAME
+```
+
+### Monitoring
+- Monitor Cloud Build logs for deployment issues
+- Check Cloud Run logs for runtime errors
+- Use Cloud Logging to track secret access patterns
+- Set up alerts for failed deployments or service errors 
