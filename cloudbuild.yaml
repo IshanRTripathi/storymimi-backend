@@ -18,6 +18,15 @@ steps:
   # Deploy to Cloud Run API
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
+    secretEnv: 
+      - 'REDIS_URL'
+      - 'SUPABASE_URL'
+      - 'SUPABASE_KEY'
+      - 'OPENROUTER_API_KEY'
+      - 'GEMINI_API_KEY'
+      - 'TOGETHER_API_KEY'
+      - 'ELEVENLABS_API_KEY'
+      - 'ELEVENLABS_VOICE_ID'
     args:
       - 'run'
       - 'deploy'
@@ -30,12 +39,22 @@ steps:
       - '--cpu=1'
       - '--min-instances=1'
       - '--max-instances=5'
-      - '--set-env-vars=REDIS_URL=redis://YOUR_REDIS_IP:6379/0'
+      - '--update-secrets=REDIS_URL=REDIS_URL:latest,SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_KEY=SUPABASE_KEY:latest,OPENROUTER_API_KEY=OPENROUTER_API_KEY:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,TOGETHER_API_KEY=TOGETHER_API_KEY:latest,ELEVENLABS_API_KEY=ELEVENLABS_API_KEY:latest,ELEVENLABS_VOICE_ID=ELEVENLABS_VOICE_ID:latest'
+      - '--set-env-vars=DEBUG=false,HOST=0.0.0.0,PORT=8080,LLM_BACKEND=gemini,OPENROUTER_BASE_URL=https://openrouter.ai/api/v1,QWEN_MODEL_NAME=qwen/qwen-2.5-7b-instruct:free,GEMINI_MODEL=gemini-2.0-flash,TOGETHER_BASE_URL=https://api.together.xyz,TOGETHER_API_URL=https://api.together.xyz/v1/images/generations,ELEVENLABS_USE_V3=false,IMAGE_MODEL=black-forest-labs/FLUX.1-schnell-Free,IMAGE_WIDTH=1024,IMAGE_HEIGHT=768,FLUX_MODEL_NAME=black-forest-labs/FLUX.1-schnell,STORY_MODEL=deepseek/deepseek-r1-0528:free,VISUAL_PROFILE_MODEL=deepseek/deepseek-r1-0528:free,BASE_STYLE_MODEL=deepseek/deepseek-r1-0528:free,SCENE_MOMENT_MODEL=deepseek/deepseek-r1-0528:free,USE_MOCK_AI_SERVICES=false,MOCK_DELAY_SECONDS=5.0'
       - '--vpc-connector=storymimi-connector'
   
   # Deploy to Cloud Run Jobs (Worker)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
+    secretEnv: 
+      - 'REDIS_URL'
+      - 'SUPABASE_URL'
+      - 'SUPABASE_KEY'
+      - 'OPENROUTER_API_KEY'
+      - 'GEMINI_API_KEY'
+      - 'TOGETHER_API_KEY'
+      - 'ELEVENLABS_API_KEY'
+      - 'ELEVENLABS_VOICE_ID'
     args:
       - 'run'
       - 'jobs'
@@ -47,10 +66,31 @@ steps:
       - '--cpu=1'
       - '--task-timeout=3600'
       - '--max-retries=3'
-      - '--set-env-vars=REDIS_URL=redis://YOUR_REDIS_IP:6379/0'
+      - '--update-secrets=REDIS_URL=REDIS_URL:latest,SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_KEY=SUPABASE_KEY:latest,OPENROUTER_API_KEY=OPENROUTER_API_KEY:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,TOGETHER_API_KEY=TOGETHER_API_KEY:latest,ELEVENLABS_API_KEY=ELEVENLABS_API_KEY:latest,ELEVENLABS_VOICE_ID=ELEVENLABS_VOICE_ID:latest'
+      - '--set-env-vars=DEBUG=false,HOST=0.0.0.0,PORT=8080,LLM_BACKEND=gemini,OPENROUTER_BASE_URL=https://openrouter.ai/api/v1,QWEN_MODEL_NAME=qwen/qwen-2.5-7b-instruct:free,GEMINI_MODEL=gemini-2.0-flash,TOGETHER_BASE_URL=https://api.together.xyz,TOGETHER_API_URL=https://api.together.xyz/v1/images/generations,ELEVENLABS_USE_V3=false,IMAGE_MODEL=black-forest-labs/FLUX.1-schnell-Free,IMAGE_WIDTH=1024,IMAGE_HEIGHT=768,FLUX_MODEL_NAME=black-forest-labs/FLUX.1-schnell,STORY_MODEL=deepseek/deepseek-r1-0528:free,VISUAL_PROFILE_MODEL=deepseek/deepseek-r1-0528:free,BASE_STYLE_MODEL=deepseek/deepseek-r1-0528:free,SCENE_MOMENT_MODEL=deepseek/deepseek-r1-0528:free,USE_MOCK_AI_SERVICES=false,MOCK_DELAY_SECONDS=5.0'
       - '--vpc-connector=storymimi-connector'
       - '--command=celery'
       - '--args=-A,app.core.celery_app:celery_app,worker,--loglevel=info'
+
+# Configure available secrets for the build steps
+availableSecrets:
+  secretManager:
+  - versionName: projects/$PROJECT_ID/secrets/REDIS_URL/versions/latest
+    env: 'REDIS_URL'
+  - versionName: projects/$PROJECT_ID/secrets/SUPABASE_URL/versions/latest
+    env: 'SUPABASE_URL'
+  - versionName: projects/$PROJECT_ID/secrets/SUPABASE_KEY/versions/latest
+    env: 'SUPABASE_KEY'
+  - versionName: projects/$PROJECT_ID/secrets/OPENROUTER_API_KEY/versions/latest
+    env: 'OPENROUTER_API_KEY'
+  - versionName: projects/$PROJECT_ID/secrets/GEMINI_API_KEY/versions/latest
+    env: 'GEMINI_API_KEY'
+  - versionName: projects/$PROJECT_ID/secrets/TOGETHER_API_KEY/versions/latest
+    env: 'TOGETHER_API_KEY'
+  - versionName: projects/$PROJECT_ID/secrets/ELEVENLABS_API_KEY/versions/latest
+    env: 'ELEVENLABS_API_KEY'
+  - versionName: projects/$PROJECT_ID/secrets/ELEVENLABS_VOICE_ID/versions/latest
+    env: 'ELEVENLABS_VOICE_ID'
 
 images:
   - 'gcr.io/$PROJECT_ID/storymimi-backend:$COMMIT_SHA'
