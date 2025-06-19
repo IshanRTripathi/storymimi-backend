@@ -7,21 +7,14 @@ from logging.handlers import RotatingFileHandler
 
 import httpx
 from app.config import settings
-from app.mocks.mock_ai_service import MockAIService
 from app.services.story_prompt_service import StoryPromptService
+from app.services.gemini_prompt_service import GeminiPromptService
+from app.services.openrouter_service import OpenRouterService  # New modular service
+from app.services.image_generation_service import ImageGenerationService  # New modular service
+from app.services.audio_generation_service import AudioGenerationService  # New modular service
 
 # Set up logging
 logger = logging.getLogger(__name__)
-
-# Set up a dedicated prompt log file
-prompt_log_file = 'logs/prompt_retries.log'
-prompt_logger = logging.getLogger('prompt_retries')
-prompt_logger.setLevel(logging.INFO)
-if not prompt_logger.handlers:
-    handler = RotatingFileHandler(prompt_log_file, maxBytes=2*1024*1024, backupCount=5)
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    prompt_logger.addHandler(handler)
 
 class ElevenLabsTTSClient:
     """Modular ElevenLabs TTS client supporting v2 and v3, with robust error handling and logging."""
@@ -87,19 +80,13 @@ class ElevenLabsTTSClient:
         raise RuntimeError(f"ElevenLabs TTS failed after {self.max_retries} retries")
 
 class AIService:
-    """Service for interacting with AI APIs (OpenRouter, Together.ai, ElevenLabs)"""
-    
+    """
+    Modular AIService for interacting with LLM, image, and audio APIs.
+    """
     def __init__(self):
-        """Initialize the service with either real or mock implementation"""
-        if settings.USE_MOCK_AI_SERVICES:
-            logger.info("Using mock AI service implementation")
-            self.mock_service = MockAIService(settings.MOCK_DELAY_SECONDS)
-        else:
-            logger.info("Using real AI service implementation")
-            self.story_prompt_service = StoryPromptService()
+        self.llm_backend = getattr(settings, "LLM_BACKEND", "openrouter")
         self.timeout = 100
         self.max_retries = 3
-        # ElevenLabs feature flag
         self.elevenlabs_use_v3 = getattr(settings, "ELEVENLABS_USE_V3", False)
         self.elevenlabs_tts = ElevenLabsTTSClient(
             api_key=settings.ELEVENLABS_API_KEY,
@@ -108,161 +95,47 @@ class AIService:
             timeout=self.timeout,
             max_retries=self.max_retries
         )
+        # Modular LLM backend selection
+        if self.llm_backend == "gemini":
+            self.llm_service = GeminiPromptService(system_instruction="You are a seasoned children's story writer and data extractor.")
+        else:
+            self.llm_service = OpenRouterService()
+        # Modular image and audio services
+        self.image_service = ImageGenerationService()
+        self.audio_service = AudioGenerationService()
 
     async def __aenter__(self):
-        """Initialize the httpx client when entering the context manager"""
-        if settings.USE_MOCK_AI_SERVICES:
-            return self.mock_service
         self.client = httpx.AsyncClient(timeout=self.timeout)
         return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Close the httpx client when exiting the context manager"""
-        if settings.USE_MOCK_AI_SERVICES:
-            return
-        await self.client.aclose()
-    
-    async def _call_api_with_retries(self, method: str, url: str, headers: Dict, json_data: Dict = None, content_type: str = "application/json") -> httpx.Response:
-        """Internal method to call an external API with retry logic, 429 handling, and error logging."""
-        backoff = 1
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                logger.info(f"[API Attempt {attempt}] Calling {method.upper()} {url}")
-                if method == "post":
-                    if content_type == "application/json":
-                        resp = await self.client.post(url, headers=headers, json=json_data)
-                    else:
-                        resp = await self.client.post(url, headers=headers, content=json_data)
-                elif method == "get":
-                    resp = await self.client.get(url, headers=headers, params=json_data)
-                else:
-                    raise ValueError(f"Unsupported HTTP method: {method}")
-                if resp.status_code == 429:
-                    retry_after = int(resp.headers.get("Retry-After", backoff))
-                    logger.warning(f"[API Rate Limit] 429 received. Retrying after {retry_after}s...")
-                    await asyncio.sleep(retry_after)
-                    backoff *= 2
-                    continue
-                resp.raise_for_status()
-                logger.info(f"[API Attempt {attempt} success] Response received from {url}")
-                return resp
-            except httpx.RequestError as e:
-                logger.warning(f"[API Retry {attempt}] {e}, retrying {url} in {backoff}s...")
-                await asyncio.sleep(backoff)
-                backoff *= 2
-            except httpx.HTTPStatusError as e:
-                # Log error payload if available
-                try:
-                    error_payload = e.response.json()
-                except Exception:
-                    error_payload = e.response.text
-                logger.error(f"[API Error] {e}, payload: {error_payload}")
-                if e.response.status_code == 429:
-                    retry_after = int(e.response.headers.get("Retry-After", backoff))
-                    logger.warning(f"[API Rate Limit] 429 received. Retrying after {retry_after}s...")
-                    await asyncio.sleep(retry_after)
-                    backoff *= 2
-                    continue
-                raise
-        raise RuntimeError(f"API call to {url} failed after {self.max_retries} retries")
 
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.client.aclose()
+
+    # Modular LLM API
     async def generate_text(self, prompt: str) -> str:
-        """Generate text using OpenRouter.ai with Qwen model
-        
-        Args:
-            prompt: The prompt to generate text from
-            
-        Returns:
-            The generated text
-            
-        Raises:
-            Exception: If the API call fails
-        """
-        if settings.USE_MOCK_AI_SERVICES:
-            logger.info("Using mock text generation")
-            return await self.mock_service.generate_text(prompt)
-        
-        logger.debug(f"Generating text with prompt length: {len(prompt)}")
-        
-        headers = {
-            "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "model": settings.QWEN_MODEL_NAME,
-            "messages": [
-                {"role": "user", "content": prompt}
-            ],
-            "max_tokens": 1000
-        }
-        
-        try:
-            logger.debug(f"Sending request to OpenRouter API with model: {settings.QWEN_MODEL_NAME}")
-            response = await self._call_api_with_retries("post", f"{settings.OPENROUTER_BASE_URL}/chat/completions", headers=headers, json_data=payload)
-            
-            data = response.json()
-            content = data["choices"][0]["message"]["content"]
-            logger.debug(f"Successfully generated text of length: {len(content)}")
-            return content
-        except Exception as e:
-            # Log the error and re-raise
-            logger.error(f"Error generating text: {str(e)}", exc_info=True)
-            raise
-    
+        return await self.llm_service.generate_text(prompt)
+
     async def generate_structured_story_llm(self, user_input: str) -> Dict[str, Any]:
-        """
-        Generates a structured story JSON using LLM via StoryPromptService.
-        Handles mock service delegation.
-        """
-        if settings.USE_MOCK_AI_SERVICES:
-            logger.info("Using mock structured story generation")
-            return await self.mock_service.generate_structured_story(user_input)
-        else:
-            logger.info("Using real structured story generation via StoryPromptService")
-            return await self.story_prompt_service.generate_structured_story(user_input)
+        return await self.llm_service.generate_structured_story(user_input)
 
     async def generate_visual_profile_llm(self, child_profile: Dict[str, Any], side_char: Dict[str, Any]) -> Dict[str, str]:
-        """
-        Generates visual prompts for child and side characters using LLM via StoryPromptService.
-        Handles mock service delegation.
-        """
-        if settings.USE_MOCK_AI_SERVICES:
-            logger.info("Using mock visual profile generation")
-            return await self.mock_service.generate_visual_profile(child_profile, side_char)
-        else:
-            logger.info("Using real visual profile generation via StoryPromptService")
-            return await self.story_prompt_service.generate_visual_profile(child_profile, side_char)
+        return await self.llm_service.generate_visual_profile(child_profile, side_char)
 
     async def generate_base_style_llm(self, setting: str, tone: str) -> str:
-        """
-        Generates a base visual style prompt using LLM via StoryPromptService.
-        Handles mock service delegation.
-        """
-        if settings.USE_MOCK_AI_SERVICES:
-            logger.info("Using mock base style generation")
-            return await self.mock_service.generate_base_style(setting, tone)
-        else:
-            logger.info("Using real base style generation via StoryPromptService")
-            return await self.story_prompt_service.generate_base_style(setting, tone)
+        return await self.llm_service.generate_base_style(setting, tone)
 
     async def generate_scene_moment_llm(self, scene_text: str) -> str:
-        """
-        Generates a descriptive phrase for a single scene's visual moment/action using LLM via StoryPromptService.
-        Handles mock service delegation.
-        """
-        if settings.USE_MOCK_AI_SERVICES:
-            logger.info("Using mock scene moment generation")
-            return await self.mock_service.generate_scene_moment(scene_text)
-        else:
-            logger.info("Using real scene moment generation via StoryPromptService")
-            return await self.story_prompt_service.generate_scene_moment(scene_text)
+        return await self.llm_service.generate_scene_moment(scene_text)
+
+    # Modular image generation
+    async def generate_image(self, prompt: str, width: int = None, height: int = None, steps: int = 4, seed: Optional[int] = None, max_retries: int = 3) -> bytes:
+        return await self.image_service.generate_image(prompt, width, height, steps, seed, max_retries)
+
+    # Modular audio generation
+    async def generate_audio(self, text: str, voice_id: str = None) -> bytes:
+        return await self.audio_service.generate_audio(text, voice_id)
 
     async def _llm_rewrite_prompt(self, error_message: str, original_prompt: str) -> str:
-        """
-        Use the LLM to rewrite the prompt to avoid the error described in error_message.
-        """
-        from app.services.gemini_prompt_service import GeminiPromptService
         gemini = GeminiPromptService(system_instruction="You are a prompt fixer. Return only a revised prompt that avoids the error described.")
         fix_prompt = (
             f"The following image prompt caused an error: {error_message}\n"
@@ -271,104 +144,6 @@ class AIService:
             "Return only the revised prompt.\n"
             f"Prompt: {original_prompt}"
         )
-        prompt_logger.info(f"[LLM Prompt Rewrite] Reason: {error_message}\nOriginal Prompt: {original_prompt}\nFix Prompt: {fix_prompt}")
+        # You may want to move this to a utility or keep as is
         revised_prompt = await asyncio.to_thread(gemini.generate, fix_prompt)
-        prompt_logger.info(f"[LLM Prompt Rewrite] Revised Prompt: {revised_prompt}")
         return revised_prompt
-
-    async def generate_image(self, prompt: str, width: int = None, height: int = None, 
-                            steps: int = 4, seed: Optional[int] = None, max_retries: int = 3) -> bytes:
-        """Generate an image using Together.ai with FLUX model
-        
-        Args:
-            prompt: The prompt to generate the image from
-            width: Width of the image (defaults to config setting)
-            height: Height of the image (defaults to config setting)
-            steps: Number of diffusion steps (defaults to 4)
-            seed: Random seed for reproducibility
-            
-        Returns:
-            Raw image bytes
-            
-        Raises:
-            Exception: If the API call fails
-        """
-        if settings.USE_MOCK_AI_SERVICES:
-            logger.info("Using mock image generation")
-            return await self.mock_service.generate_image(prompt, width, height, steps, seed)
-        
-        width = width if width is not None else settings.IMAGE_WIDTH
-        height = height if height is not None else settings.IMAGE_HEIGHT
-
-        logger.debug(f"Generating image with prompt length: {len(prompt)}, dimensions: {width}x{height}")
-        
-        safe_prompt = prompt + "\nThis image must be safe for children. No nudity, violence, or inappropriate content. G-rated. Wholesome. No NSFW elements."
-        headers = {
-            "Authorization": f"Bearer {settings.TOGETHER_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "model": settings.IMAGE_MODEL,
-            "prompt": safe_prompt,
-            "width": width,
-            "height": height,
-            "steps": steps,
-            "response_format": "b64_json"
-        }
-        
-        if seed is not None:
-            payload["seed"] = seed
-            logger.debug(f"Using seed: {seed} for image generation")
-        
-        for attempt in range(max_retries):
-            try:
-                logger.debug(f"Sending request to Together.ai API with model: {settings.IMAGE_MODEL}")
-                prompt_logger.info(f"[Image Gen Attempt] Attempt {attempt+1} - Prompt: {payload['prompt']}")
-                response = await self._call_api_with_retries("post", settings.TOGETHER_API_URL, headers=headers, json_data=payload)
-                
-                data = response.json()
-                logger.debug("Successfully received image data from Together.ai API")
-                
-                try:
-                    image_data = base64.b64decode(data["data"][0].get("b64_json", ""))
-                    if not image_data or len(image_data) < 100:
-                        logger.error("Invalid image data received from Together.ai API")
-                        raise ValueError("Invalid image data from API")
-                    logger.debug(f"Successfully decoded image data, size: {len(image_data)} bytes")
-                    return image_data
-                except Exception as decode_error:
-                    logger.error(f"Failed to decode image data: {str(decode_error)}")
-                    raise ValueError(f"Failed to decode image data: {str(decode_error)}") from decode_error
-            except httpx.HTTPStatusError as e:
-                error_text = e.response.text if e.response is not None else str(e)
-                logger.warning(f"[Image Prompt Error] Attempt {attempt+1}: {error_text}")
-                prompt_logger.warning(f"[Image Gen Retry] Attempt {attempt+1} - Reason: {error_text}\nPrompt: {payload['prompt']}")
-                if e.response is not None and e.response.status_code == 422:
-                    # Use LLM to rewrite prompt based on error
-                    safe_prompt = await self._llm_rewrite_prompt(error_text, safe_prompt)
-                    payload["prompt"] = safe_prompt
-                    continue
-                else:
-                    raise
-        logger.error("Failed to generate safe image after retries.")
-        prompt_logger.error(f"[Image Gen Failure] All retries failed for prompt: {payload['prompt']}")
-        raise
-    
-    async def generate_audio(self, text: str, voice_id: str = None) -> bytes:
-        """Generate audio using ElevenLabs API (v2 or v3, feature-flagged)."""
-        if settings.USE_MOCK_AI_SERVICES:
-            logger.info("Using mock audio generation")
-            return await self.mock_service.generate_audio(text, voice_id or settings.ELEVENLABS_VOICE_ID)
-        # Use the modular TTS client
-        if voice_id and voice_id != self.elevenlabs_tts.voice_id:
-            # If a different voice is requested, create a temp client
-            tts_client = ElevenLabsTTSClient(
-                api_key=settings.ELEVENLABS_API_KEY,
-                voice_id=voice_id,
-                use_v3=self.elevenlabs_use_v3,
-                timeout=self.timeout,
-                max_retries=self.max_retries
-            )
-            return await tts_client.generate_audio(text)
-        return await self.elevenlabs_tts.generate_audio(text)

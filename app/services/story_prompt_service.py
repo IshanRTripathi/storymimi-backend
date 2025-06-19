@@ -17,25 +17,6 @@ from app.services.gemini_prompt_service import GeminiPromptService
 
 logger = logging.getLogger(__name__)
 
-LLM_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs')
-LLM_LOG_FILE = os.path.join(LLM_LOG_DIR, 'llm_responses.log')
-if not os.path.exists(LLM_LOG_DIR):
-    os.makedirs(LLM_LOG_DIR)
-
-llm_file_logger = logging.getLogger('llm_responses')
-llm_file_logger.setLevel(logging.INFO)
-if not llm_file_logger.handlers:
-    fh = logging.FileHandler(LLM_LOG_FILE)
-    fh.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    fh.setFormatter(formatter)
-    llm_file_logger.addHandler(fh)
-
-# Helper to log LLM responses
-def log_llm_response(context: str, prompt: str, response: str):
-    llm_file_logger.info(f"[LLM] Context: {context}\nPrompt: {prompt}\nResponse: {response}\n{'-'*80}")
-    # logger.info(f"[LLM] Context: {context}\nPrompt: {prompt}\nResponse: {response}\n{'-'*80}")
-
 class StoryPromptService:
     """
     Service for generating various LLM prompts and interacting with OpenRouter or Gemini.

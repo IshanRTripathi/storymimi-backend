@@ -1,0 +1,50 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+
+# Git
+.git/
+.gitignore
+
+# Logs
+logs/
+*.log
+celery.log
+app.log
+server.log
+startup.log
+
+# Tests and dev scripts
+tests/
+test_create_user.py
+start_all.py
+start_without_redis.py
+
+# Docs and Postman
+StoryMimi_Postman_Collection.json
+docs/
+API_DOCUMENTATION.md
+ROADMAP.md
+TESTING_GUIDE.md
+
+# Mock data and dev-only
+app/mocks/
+
+# Static files (optional, if not serving from backend)
+# static/
+
+# Env files
+.env
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Misc
+*.swp
+*.bak
+*.tmp
+*.old 
