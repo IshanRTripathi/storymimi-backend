@@ -43,5 +43,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 USER storymimi
 
 # Entrypoint logic (override in docker-compose or k8s):
-# For FastAPI:   CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-# For Celery:    CMD ["celery", "-A", "app.core.celery_app:celery_app", "worker", "--loglevel=info"] 
+# For FastAPI: we set the run command here  
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# For Celery: we dont set the run commands here as the celery workflow is amnaged by cloud run jobs
+# CMD ["celery", "-A", "app.core.celery_app:celery_app", "worker", "--loglevel=info"] 

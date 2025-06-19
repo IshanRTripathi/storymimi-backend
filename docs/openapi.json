@@ -1,0 +1,1045 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+      "title": "StoryMimi API",
+      "description": "API for generating stories with text, images, and audio using AI",
+      "version": "0.1.0"
+    },
+    "paths": {
+      "/stories/": {
+        "post": {
+          "tags": [
+            "stories"
+          ],
+          "summary": "Create Story",
+          "description": "Create a new story based on the provided prompt\n\nArgs:\n    request: The StoryRequest containing story details\n    service: The StoryService instance (injected by FastAPI)\n    \nReturns:\n    A StoryResponse with the story_id and initial status\n    \nRaises:\n    HTTPException: If story creation fails",
+          "operationId": "create_story_stories__post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoryRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "202": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/StoryResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/stories/{story_id}": {
+        "get": {
+          "tags": [
+            "stories"
+          ],
+          "summary": "Get Story",
+          "description": "Get the full details of a story including all scenes\n\nArgs:\n    story_id: The ID of the story\n    service: The StoryService instance (injected by FastAPI)\n    \nReturns:\n    A StoryDetail object with all story information\n    \nRaises:\n    HTTPException: If story retrieval fails",
+          "operationId": "get_story_stories__story_id__get",
+          "parameters": [
+            {
+              "name": "story_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid",
+                "title": "Story Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/StoryDetail"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "delete": {
+          "tags": [
+            "stories"
+          ],
+          "summary": "Delete Story",
+          "description": "Delete a story and all its associated scenes and files\n\nArgs:\n    story_id: The ID of the story to delete\n    service: The StoryService instance (injected by FastAPI)\n    \nReturns:\n    A dictionary with success status\n    \nRaises:\n    HTTPException: If deletion fails",
+          "operationId": "delete_story_stories__story_id__delete",
+          "parameters": [
+            {
+              "name": "story_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid",
+                "title": "Story Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "boolean"
+                    },
+                    "title": "Response Delete Story Stories  Story Id  Delete"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/stories/{story_id}/status": {
+        "get": {
+          "tags": [
+            "stories"
+          ],
+          "summary": "Get Story Status",
+          "description": "Get the current status of a story\n\nArgs:\n    story_id: The ID of the story\n    service: The StoryService instance (injected by FastAPI)\n    \nReturns:\n    A dictionary with story_id and status\n    \nRaises:\n    HTTPException: If story retrieval fails",
+          "operationId": "get_story_status_stories__story_id__status_get",
+          "parameters": [
+            {
+              "name": "story_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid",
+                "title": "Story Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "title": "Response Get Story Status Stories  Story Id  Status Get"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "put": {
+          "tags": [
+            "stories"
+          ],
+          "summary": "Update Story Status",
+          "description": "Update the status of a story\n\nArgs:\n    story_id: The ID of the story\n    status_data: Dictionary with the new status value\n    service: The StoryService instance (injected by FastAPI)\n    \nReturns:\n    A dictionary with success status\n    \nRaises:\n    HTTPException: If status update fails",
+          "operationId": "update_story_status_stories__story_id__status_put",
+          "parameters": [
+            {
+              "name": "story_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid",
+                "title": "Story Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Status Data"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "boolean"
+                    },
+                    "title": "Response Update Story Status Stories  Story Id  Status Put"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/stories/search/": {
+        "get": {
+          "tags": [
+            "stories"
+          ],
+          "summary": "Search Stories",
+          "description": "Search for stories by title or prompt\n\nArgs:\n    q: The search term to look for in titles and prompts\n    limit: Maximum number of results to return (default: 10, max: 50)\n    service: The StoryService instance (injected by FastAPI)\n    \nReturns:\n    A list of story dictionaries matching the search term\n    \nRaises:\n    HTTPException: If search fails",
+          "operationId": "search_stories_stories_search__get",
+          "parameters": [
+            {
+              "name": "q",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "description": "Search term to look for in story titles and prompts",
+                "title": "Q"
+              },
+              "description": "Search term to look for in story titles and prompts"
+            },
+            {
+              "name": "limit",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "integer",
+                "maximum": 50,
+                "minimum": 1,
+                "description": "Maximum number of results to return",
+                "default": 10,
+                "title": "Limit"
+              },
+              "description": "Maximum number of results to return"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "title": "Response Search Stories Stories Search  Get"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/stories/recent/": {
+        "get": {
+          "tags": [
+            "stories"
+          ],
+          "summary": "Get Recent Stories",
+          "description": "Get the most recently created stories\n\nArgs:\n    limit: Maximum number of stories to return (default: 10, max: 50)\n    service: The StoryService instance (injected by FastAPI)\n    \nReturns:\n    A list of recent story dictionaries\n    \nRaises:\n    HTTPException: If retrieval fails",
+          "operationId": "get_recent_stories_stories_recent__get",
+          "parameters": [
+            {
+              "name": "limit",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "integer",
+                "maximum": 50,
+                "minimum": 1,
+                "description": "Maximum number of stories to return",
+                "default": 10,
+                "title": "Limit"
+              },
+              "description": "Maximum number of stories to return"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "title": "Response Get Recent Stories Stories Recent  Get"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/users/": {
+        "post": {
+          "tags": [
+            "users"
+          ],
+          "summary": "Create User",
+          "description": "Create a new user\n\nArgs:\n    user: The UserCreate object with user details\n    db_client: The SupabaseClient instance (injected by FastAPI)\n    \nReturns:\n    A UserResponse with the created user details\n    \nRaises:\n    HTTPException: If user creation fails",
+          "operationId": "create_user_users__post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserCreate"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "201": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UserResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/users/{user_id}": {
+        "get": {
+          "tags": [
+            "users"
+          ],
+          "summary": "Get User",
+          "description": "Get a user by ID\n\nArgs:\n    user_id: The ID of the user\n    db_client: The SupabaseClient instance (injected by FastAPI)\n    \nReturns:\n    A UserResponse with the user details\n    \nRaises:\n    HTTPException: If user retrieval fails",
+          "operationId": "get_user_users__user_id__get",
+          "parameters": [
+            {
+              "name": "user_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid",
+                "title": "User Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UserResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "patch": {
+          "tags": [
+            "users"
+          ],
+          "summary": "Update User",
+          "description": "Update a user's information\n\nArgs:\n    user_id: The ID of the user to update\n    user_data: Dictionary of fields to update\n    service: The StoryService instance (injected by FastAPI)\n    \nReturns:\n    The updated UserResponse\n    \nRaises:\n    HTTPException: If user update fails",
+          "operationId": "update_user_users__user_id__patch",
+          "parameters": [
+            {
+              "name": "user_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid",
+                "title": "User Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "User Data"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UserResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/users/{user_id}/stories": {
+        "get": {
+          "tags": [
+            "users"
+          ],
+          "summary": "Get User Stories",
+          "description": "Get all stories for a user\n\nArgs:\n    user_id: The ID of the user\n    service: The StoryService instance (injected by FastAPI)\n    \nReturns:\n    A list of story dictionaries\n    \nRaises:\n    HTTPException: If story retrieval fails",
+          "operationId": "get_user_stories_users__user_id__stories_get",
+          "parameters": [
+            {
+              "name": "user_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid",
+                "title": "User Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "title": "Response Get User Stories Users  User Id  Stories Get"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/": {
+        "get": {
+          "tags": [
+            "root"
+          ],
+          "summary": "Root",
+          "description": "Root endpoint - redirects to static index.html",
+          "operationId": "root__get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/health": {
+        "get": {
+          "tags": [
+            "health"
+          ],
+          "summary": "Health Check",
+          "description": "Health check endpoint",
+          "operationId": "health_check_health_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "schemas": {
+        "HTTPValidationError": {
+          "properties": {
+            "detail": {
+              "items": {
+                "$ref": "#/components/schemas/ValidationError"
+              },
+              "type": "array",
+              "title": "Detail"
+            }
+          },
+          "type": "object",
+          "title": "HTTPValidationError"
+        },
+        "Scene": {
+          "properties": {
+            "scene_id": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scene Id",
+              "info": {
+                "description": "Unique identifier for the scene"
+              }
+            },
+            "story_id": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Story Id",
+              "info": {
+                "description": "ID of the story this scene belongs to"
+              }
+            },
+            "sequence": {
+              "type": "integer",
+              "title": "Sequence",
+              "info": {
+                "description": "Sequence number of the scene in the story"
+              }
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Title",
+              "info": {
+                "description": "Scene title"
+              }
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 5000,
+              "minLength": 1,
+              "title": "Text",
+              "info": {
+                "description": "Scene text"
+              }
+            },
+            "image_prompt": {
+              "type": "string",
+              "maxLength": 3000,
+              "minLength": 1,
+              "title": "Image Prompt",
+              "info": {
+                "description": "Prompt for generating scene image"
+              }
+            },
+            "image_url": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000,
+                  "pattern": "^https?://[\\w.-]+(?:/[\\w.-]*)*\\??$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Image Url",
+              "info": {
+                "description": "URL of the scene image"
+              }
+            },
+            "audio_url": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000,
+                  "pattern": "^https?://[\\w.-]+(?:/[\\w.-]*)*\\??$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Audio Url",
+              "info": {
+                "description": "URL of the scene audio"
+              }
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Created At",
+              "info": {
+                "description": "Creation timestamp"
+              }
+            },
+            "updated_at": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Updated At",
+              "info": {
+                "description": "Last update timestamp"
+              }
+            }
+          },
+          "type": "object",
+          "required": [
+            "scene_id",
+            "story_id",
+            "sequence",
+            "title",
+            "text",
+            "image_prompt",
+            "created_at",
+            "updated_at"
+          ],
+          "title": "Scene",
+          "description": "Model for a story scene"
+        },
+        "StoryDetail": {
+          "properties": {
+            "story_id": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Story Id",
+              "info": {
+                "description": "Story ID"
+              }
+            },
+            "title": {
+              "type": "string",
+              "title": "Title",
+              "info": {
+                "description": "Title of the story"
+              }
+            },
+            "status": {
+              "$ref": "#/components/schemas/StoryStatus",
+              "info": {
+                "description": "Current status of the story"
+              }
+            },
+            "scenes": {
+              "items": {
+                "$ref": "#/components/schemas/Scene"
+              },
+              "type": "array",
+              "title": "Scenes",
+              "info": {
+                "description": "List of story scenes"
+              }
+            },
+            "user_id": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id",
+              "info": {
+                "description": "User ID"
+              }
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Created At",
+              "info": {
+                "description": "Creation timestamp"
+              }
+            },
+            "updated_at": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Updated At",
+              "info": {
+                "description": "Last update timestamp"
+              }
+            },
+            "story_metadata": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Story Metadata",
+              "info": {
+                "description": "LLM-generated structured story metadata"
+              }
+            }
+          },
+          "type": "object",
+          "required": [
+            "story_id",
+            "title",
+            "status",
+            "scenes",
+            "user_id",
+            "created_at",
+            "updated_at"
+          ],
+          "title": "StoryDetail",
+          "description": "Model for complete story details"
+        },
+        "StoryRequest": {
+          "properties": {
+            "title": {
+              "type": "string",
+              "title": "Title",
+              "info": {
+                "description": "Title for the story"
+              }
+            },
+            "prompt": {
+              "type": "string",
+              "title": "Prompt",
+              "info": {
+                "description": "Prompt for story generation"
+              }
+            },
+            "user_id": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id",
+              "info": {
+                "description": "User ID"
+              }
+            }
+          },
+          "type": "object",
+          "required": [
+            "title",
+            "prompt",
+            "user_id"
+          ],
+          "title": "StoryRequest",
+          "description": "Request model for creating a story"
+        },
+        "StoryResponse": {
+          "properties": {
+            "status": {
+              "type": "string",
+              "title": "Status",
+              "info": {
+                "description": "Current status of the story"
+              }
+            },
+            "title": {
+              "type": "string",
+              "title": "Title",
+              "info": {
+                "description": "Title of the story"
+              }
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error",
+              "info": {
+                "description": "Error message if present"
+              }
+            },
+            "story_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Story Id",
+              "info": {
+                "description": "Story ID"
+              }
+            },
+            "user_id": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id",
+              "info": {
+                "description": "User ID"
+              }
+            },
+            "created_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created At",
+              "info": {
+                "description": "Creation timestamp"
+              }
+            },
+            "updated_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Updated At",
+              "info": {
+                "description": "Last update timestamp"
+              }
+            }
+          },
+          "type": "object",
+          "required": [
+            "status",
+            "title",
+            "user_id"
+          ],
+          "title": "StoryResponse",
+          "description": "Response model for story operations"
+        },
+        "StoryStatus": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "processing",
+            "completed",
+            "failed"
+          ],
+          "title": "StoryStatus",
+          "description": "Enum for story status values"
+        },
+        "UserCreate": {
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "title": "Email",
+              "description": "User's email address"
+            },
+            "username": {
+              "type": "string",
+              "title": "Username",
+              "description": "User's username"
+            }
+          },
+          "type": "object",
+          "required": [
+            "email",
+            "username"
+          ],
+          "title": "UserCreate",
+          "description": "Model for creating a new user"
+        },
+        "UserResponse": {
+          "properties": {
+            "user_id": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id",
+              "description": "Unique identifier for the user"
+            },
+            "email": {
+              "type": "string",
+              "format": "email",
+              "title": "Email",
+              "description": "User's email address"
+            },
+            "username": {
+              "type": "string",
+              "title": "Username",
+              "description": "User's username"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Created At",
+              "description": "When the user was created"
+            }
+          },
+          "type": "object",
+          "required": [
+            "user_id",
+            "email",
+            "username",
+            "created_at"
+          ],
+          "title": "UserResponse",
+          "description": "Response model for user data"
+        },
+        "ValidationError": {
+          "properties": {
+            "loc": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ]
+              },
+              "type": "array",
+              "title": "Location"
+            },
+            "msg": {
+              "type": "string",
+              "title": "Message"
+            },
+            "type": {
+              "type": "string",
+              "title": "Error Type"
+            }
+          },
+          "type": "object",
+          "required": [
+            "loc",
+            "msg",
+            "type"
+          ],
+          "title": "ValidationError"
+        }
+      }
+    }
+  }
