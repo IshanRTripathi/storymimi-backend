@@ -43,7 +43,7 @@ Both API and worker services are deployed as Cloud Run services with:
 - `secretEnv` - Makes secrets available to the build step
 - `--update-secrets` - Configures Cloud Run services to access secrets
 - `--set-env-vars` - Sets non-sensitive environment variables
-- `--command` - For worker: runs Celery worker instead of the default FastAPI server
+- `--command` - For worker: runs `worker_with_health.py` (Celery + HTTP health endpoint)
 
 ## Permissions
 
@@ -87,8 +87,18 @@ echo 'your-openrouter-key' | gcloud secrets versions add OPENROUTER_API_KEY --da
 1. **Build Trigger**: Push to GitHub triggers Cloud Build
 2. **Secret Access**: Cloud Build accesses secrets during deployment
 3. **API Service**: Deploys `storymimi-api` as a public Cloud Run service
-4. **Worker Service**: Deploys `storymimi-worker` as a private Cloud Run service running Celery
+4. **Worker Service**: Deploys `storymimi-worker` as a private Cloud Run service running Celery with HTTP health checks
 5. **Automatic Restart**: Both services restart with new configuration and secrets
+
+## Worker Health Check Solution
+
+The Celery worker runs with a custom script (`worker_with_health.py`) that:
+- **Dual Purpose**: Runs both Celery worker and HTTP health check server
+- **Health Endpoint**: Provides `/health` endpoint on port 8080 for Cloud Run probes
+- **Background Threading**: Health server runs in daemon thread, Celery in main thread
+- **Cloud Run Compatible**: Satisfies Cloud Run's requirement for HTTP health checks
+
+This solves the issue where Cloud Run expects HTTP responses but Celery workers don't provide them.
 
 ## Security Benefits
 
