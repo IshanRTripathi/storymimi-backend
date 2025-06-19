@@ -55,48 +55,29 @@ def run_health_server():
         raise
 
 def run_celery_worker():
-    """Run the Celery worker with Redis reconnection bug fixes"""
+    """Run the Celery worker"""
     logger.info("Starting Celery worker...")
     try:
         from app.core.celery_app import celery_app
         
-        # CRITICAL: These worker options are essential to fix the Celery 5.x Redis reconnection bug
-        # Based on extensive research from GitHub issue #7276 and production deployments
+        # CRITICAL: Worker options to fix Redis reconnection bug in Celery 5.x
+        # --without-mingle and --without-gossip are essential to prevent task consumption freeze
         worker_options = [
             'worker',
             '--loglevel=info',
             '--concurrency=2',
             '--max-tasks-per-child=1000',
-            
-            # MOST CRITICAL FLAGS: These prevent the Redis reconnection freeze bug
-            '--without-mingle',      # CRITICAL: Prevents worker freeze after Redis reconnection
-            '--without-gossip',      # CRITICAL: Prevents network overhead and connection issues
-            '--without-heartbeat',   # CRITICAL: Prevents heartbeat-related connection problems
-            
-            # Additional reliability flags
-            '--pool=prefork',        # Use prefork pool for better process isolation
-            '--queues=default',      # Explicitly set queue to avoid routing issues
-            '--time-limit=3600',     # 1 hour time limit per task
-            '--soft-time-limit=3300', # 55 minutes soft limit (gives 5 min cleanup time)
-            
-            # Connection and task handling
-            '--prefetch-multiplier=1',  # Process one task at a time for reliability
-            '--max-memory-per-child=200000',  # 200MB memory limit per child (restart on exceed)
-            
-            # Optimization flags for Cloud Run environment
-            '--optimization=fair',   # Fair task distribution
-            '--without-task-hijacking',  # Prevent task hijacking between workers
+            '--without-mingle',      # CRITICAL: Prevents Redis reconnection bug
+            '--without-gossip',      # CRITICAL: Prevents Redis reconnection bug  
+            '--without-heartbeat',   # CRITICAL: Prevents heartbeat-related connection issues
+            '--pool=prefork'         # Use prefork pool for better reliability
         ]
         
         logger.info(f"Starting Celery worker with Redis reconnection bug fixes: {worker_options}")
-        
-        # Start the worker with the critical options
         celery_app.worker_main(worker_options)
-        
     except Exception as e:
         logger.error(f"Celery worker error: {e}")
-        # Don't raise - let the health server continue running
-        sys.exit(1)
+        raise
 
 def main():
     """Main function to start both health server and Celery worker"""
