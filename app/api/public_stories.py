@@ -151,6 +151,13 @@ async def get_story_details(
     except Exception as e:
         logger.error(f"Error getting story details for ID {story_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+@router.get(
+    "",
+    response_model=List[PublicStorySummary],
+    tags=["public-stories"],
+    summary="Get Public Stories",
+    description="Get a list of public stories with optional filtering"
+)
 async def get_public_stories(
     category: Optional[StoryCategory] = None,
     tags: Optional[List[str]] = None,
@@ -176,18 +183,4 @@ async def get_public_stories(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/{story_id}", response_model=PublicStoryDetail, tags=["public-stories"],
-            summary="Get Public Story by ID",
-            description="Get a specific public story by ID")
-async def get_public_story(
-    story_id: UUID,
-    service: PublicStoryService = Depends(get_public_story_service)
-) -> PublicStoryDetail:
-    """Get a specific public story by ID"""
-    try:
-        story = await service.get_public_story(story_id)
-        if not story:
-            raise HTTPException(status_code=404, detail="Story not found")
-        return story
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+

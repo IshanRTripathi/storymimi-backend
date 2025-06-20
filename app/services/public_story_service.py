@@ -5,6 +5,7 @@ from datetime import datetime
 from app.models.public_story_models import (
     PublicStorySummary,
     PublicStoryDetail,
+    PublicStoryScene,
     CategorizedPublicStories,
     StoryCategory,
     AgeRating,
@@ -53,8 +54,8 @@ class PublicStoryService:
             logger.error(f"Error getting public stories: {str(e)}", exc_info=True)
             raise
     
-    async def get_public_story(self, story_id: Union[str, UUID]) -> Optional[PublicStoryDetail]:
-        """Get a specific public story by ID
+    async def get_story_details(self, story_id: Union[str, UUID]) -> Optional[PublicStoryDetail]:
+        """Get detailed information about a public story
         
         Args:
             story_id: The ID of the story
@@ -75,16 +76,14 @@ class PublicStoryService:
             
             # Create PublicStoryDetail object
             story_detail = PublicStoryDetail(
-                **story,
-                scenes=scenes,
-                id=story["id"]
+                **story
             )
             
-            # Increment view count
-            await self.repo.increment_view_count(story_id)
+
+            
             return story_detail
         except Exception as e:
-            logger.error(f"Error getting public stories: {str(e)}", exc_info=True)
+            logger.error(f"Error getting story details {story_id}: {str(e)}", exc_info=True)
             raise
 
     async def get_categorized_stories(self) -> CategorizedPublicStories:
@@ -116,42 +115,3 @@ class PublicStoryService:
             logger.error(f"Error getting categorized stories: {str(e)}", exc_info=True)
             raise
             
-
-        """Get detailed information about a public story
-        
-        Args:
-            story_id: The ID of the story
-            
-        Returns:
-            PublicStoryDetail object or None if not found
-        """
-        try:
-            story = await self.repo.get_public_story(story_id)
-            if not story:
-                return None
-                
-            # Convert scenes JSON to list of PublicStoryScene objects
-            scenes = []
-            if story.get("scenes"):
-                for scene_data in story["scenes"]:
-                    scenes.append(PublicStoryScene(**scene_data))
-            
-            # Create PublicStoryDetail object
-            story_detail = PublicStoryDetail(
-                **story,
-                scenes=scenes,
-                id=story["id"]
-            )
-            
-            # Increment view count
-            await self.repo.increment_view_count(story_id)
-            
-            return story_detail
-        except Exception as e:
-            logger.error(f"Error getting story details {story_id}: {str(e)}", exc_info=True)
-            raise
-
-
-        except Exception as e:
-            logger.error(f"Error getting public story {story_id}: {str(e)}", exc_info=True)
-            raise

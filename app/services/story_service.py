@@ -47,14 +47,6 @@ class StoryService:
             
             story_id = story["story_id"]
             logger.info(f"Story record created with ID: {story_id}")
-            
-            # Validate model data before returning (allowing partial data for initial creation)
-            # Validator.validate_model_data({
-            #     "story_id": story_id,
-            #     "title": request.title,
-            #     "status": StoryStatus.PENDING,
-            #     "user_id": request.user_id
-            # }, is_initial_creation=True)
 
             # Try to dispatch Celery task, but don't fail if it doesn't work
             try:
@@ -174,10 +166,6 @@ class StoryService:
 
         try:
             stories = await self.user_client.get_user_stories(user_id)
-            # Validate each story in the list
-            for story in stories:
-                Validator.validate_model_data(story, is_response=True)
-
             elapsed = time.time() - start_time
             logger.info(f"Retrieved {len(stories)} stories for user ID: {user_id} in {elapsed:.2f}s")
             return stories
@@ -193,9 +181,6 @@ class StoryService:
 
         try:
             stories = await self.story_client.search_stories(search_term, limit)
-            # Validate each story in the list
-            for story in stories:
-                Validator.validate_model_data(story, is_response=True)
 
             elapsed = time.time() - start_time
             logger.info(f"Found {len(stories)} stories matching search term: {search_term} in {elapsed:.2f}s")
@@ -212,9 +197,6 @@ class StoryService:
 
         try:
             stories = await self.story_client.get_recent_stories(limit)
-            # Validate each story in the list
-            for story in stories:
-                Validator.validate_model_data(story, is_response=True)
 
             elapsed = time.time() - start_time
             logger.info(f"Retrieved {len(stories)} recent stories in {elapsed:.2f}s")
