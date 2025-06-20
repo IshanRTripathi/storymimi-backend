@@ -1,6 +1,8 @@
 services:
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.api
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
     env_file:
       - .env
@@ -8,16 +10,27 @@ services:
       - "8080:8080"
     depends_on:
       - redis
+      - worker
     restart: unless-stopped
+    user: "1000:1000"
+    volumes:
+      - .:/app
+      - /app/.venv
 
   worker:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
     command: ["celery", "-A", "app.core.celery_app:celery_app", "worker", "--loglevel=info"]
     env_file:
       - .env
     depends_on:
       - redis
     restart: unless-stopped
+    user: "1000:1000"
+    volumes:
+      - .:/app
+      - /app/.venv
 
   redis:
     image: redis:alpine

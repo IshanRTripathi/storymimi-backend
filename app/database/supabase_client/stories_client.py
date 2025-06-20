@@ -299,6 +299,36 @@ class StoryRepository(SupabaseBaseClient):
             elapsed = time.time() - start_time
             logger.error(f"Failed to search stories in {elapsed:.2f}s: {str(e)}", exc_info=True)
             raise
+
+    async def get_story_scenes(self, story_id: Union[str, UUID]) -> List[Dict[str, Any]]:
+        """Get all scenes for a story
+        
+        Args:
+            story_id: The ID of the story to get scenes for
+            
+        Returns:
+            List of scene dictionaries
+            
+        Raises:
+            Exception: If scene retrieval fails
+        """
+        start_time = time.time()
+        story_id_str = str(story_id)
+        
+        self._log_operation("select", "scenes", filters={"story_id": story_id_str})
+        logger.info(f"Getting scenes for story with ID: {story_id_str}")
+        
+        try:
+            response = self.client.table("scenes").select("*").eq("story_id", story_id_str).order("sequence").execute()
+            scenes = response.data if response.data else []
+            
+            elapsed = time.time() - start_time
+            logger.info(f"Retrieved {len(scenes)} scenes in {elapsed:.2f}s for story: {story_id_str}")
+            return scenes
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"Failed to get scenes in {elapsed:.2f}s: {str(e)}", exc_info=True)
+            raise
     
     async def get_recent_stories(self, limit: int = 10) -> List[Dict[str, Any]]:
         """Get the most recently created stories

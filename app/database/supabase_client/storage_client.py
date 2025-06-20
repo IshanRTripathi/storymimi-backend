@@ -28,14 +28,11 @@ class StorageService(SupabaseBaseClient):
     AUDIO_BUCKET = "audio"
     IMAGE_BUCKET = "images"
     
-    def __init__(self, supabase_url: Optional[str] = None, supabase_key: Optional[str] = None):
-        """Initialize the storage service with Supabase credentials."""
-        self.supabase_url = supabase_url or settings.SUPABASE_URL
-        self.supabase_key = supabase_key or settings.SUPABASE_KEY
-        self.client = create_client(self.supabase_url, self.supabase_key)
+    def __init__(self):
+        """Initialize the storage service."""
+        super().__init__()
         self.max_retries = 3
         self.timeout = 100
-        super().__init__()
         self._cache = {}  # Simple in-memory cache
         self._cache_ttl = 3600  # Cache TTL in seconds
         self._last_cleanup = time.time()

@@ -15,16 +15,12 @@ class SupabaseBaseClient:
     def __init__(self):
         """Initialize the Supabase client with proper configuration"""
         logger.info("Initializing Supabase client")
-        try:
-            self.client = create_client(
-                settings.SUPABASE_URL,
-                settings.SUPABASE_KEY
-            )
-            self.storage = self.client.storage
-            logger.info("Supabase client initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize Supabase client: {str(e)}", exc_info=True)
-            raise
+        self.client = create_client(
+            settings.SUPABASE_URL,
+            settings.SUPABASE_KEY
+        )
+        self.storage = self.client.storage
+        logger.info("Supabase client initialized successfully")
     
     def _log_operation(self, operation: str, table: str, data: Any = None, filters: Any = None) -> None:
         """Log database operation details

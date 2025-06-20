@@ -5,7 +5,9 @@ import logging
 import uuid
 from datetime import datetime
 
-from app.database.supabase_client import StoryRepository, SceneRepository, StorageService
+from app.database.supabase_client.stories_client import StoryRepository
+from app.database.supabase_client.scenes_client import SceneRepository
+from app.database.supabase_client import StorageService
 from app.models.story_types import StoryRequest, StoryResponse, StoryDetail, StoryStatus
 from app.services.story_service import StoryService
 from app.utils.json_converter import JSONConverter
@@ -18,9 +20,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/stories", tags=["stories"])
 
 # Dependency to get a StoryService instance
-def get_story_service(db_client: StoryRepository = Depends(StoryRepository)) -> StoryService:
+def get_story_service(
+    story_client: StoryRepository = Depends(StoryRepository),
+    scene_client: SceneRepository = Depends(SceneRepository)
+) -> StoryService:
     """Dependency to get a StoryService instance"""
-    return StoryService(db_client)
+    return StoryService(story_client, scene_client)
 
 @router.post("/", response_model=StoryResponse, status_code=202, tags=["stories"], summary="Create Story", description="Create a new story based on the provided prompt.")
 async def create_story(

@@ -12,6 +12,11 @@ logger = logging.getLogger(__name__)
 class SceneRepository(SupabaseBaseClient):
     """Repository for scene-related operations"""
     
+    def __init__(self):
+        """Initialize the repository with a Supabase client instance"""
+        super().__init__()
+        logger.info("SceneRepository initialized successfully")
+    
     async def create_scene(self, scene: Scene, user_id: Optional[UUID] = None) -> Optional[Dict[str, Any]]:
         """Create a new scene for a story with audit trail
         
@@ -58,7 +63,7 @@ class SceneRepository(SupabaseBaseClient):
         logger.info(f"Creating scene with ID: {scene_id_str}")
         
         try:
-            response = self.client.table("scenes").insert(scene_data).execute()
+            response = await self.client.table("scenes").insert(scene_data).execute()
             
             if not response.data:
                 logger.error(f"Failed to create scene: No data returned from database")
@@ -91,7 +96,7 @@ class SceneRepository(SupabaseBaseClient):
         logger.info(f"Getting scene with ID: {scene_id_str}")
         
         try:
-            response = self.client.table("scenes").select("*").eq("scene_id", scene_id_str).execute()
+            response = await self.client.table("scenes").select("*").eq("scene_id", scene_id_str).execute()
             
             if not response.data:
                 logger.warning(f"Scene not found with ID: {scene_id_str}")
@@ -136,7 +141,7 @@ class SceneRepository(SupabaseBaseClient):
             raise
     
     async def delete_scene(self, scene_id: Union[str, UUID]) -> bool:
-        """Delete a scene
+        """Delete a scene and its associated files
         
         Args:
             scene_id: The ID of the scene to delete
@@ -154,7 +159,20 @@ class SceneRepository(SupabaseBaseClient):
         logger.info(f"Deleting scene with ID: {scene_id_str}")
         
         try:
-            response = self.client.table("scenes").delete().eq("scene_id", scene_id_str).execute()
+            # First get the scene to get file URLs
+            scene = await self.get_scene(scene_id)
+            if not scene:
+                logger.warning(f"Scene not found for deletion: {scene_id_str}")
+                return False
+                
+            # Delete image and audio files if they exist
+            if scene.get("image_url"):
+                await self._delete_file(scene["image_url"])
+            if scene.get("audio_url"):
+                await self._delete_file(scene["audio_url"])
+                
+            # Delete the scene record
+            response = await self.client.table("scenes").delete().eq("scene_id", scene_id_str).execute()
             success = bool(response.data)
             
             elapsed = time.time() - start_time
@@ -167,6 +185,36 @@ class SceneRepository(SupabaseBaseClient):
         except Exception as e:
             elapsed = time.time() - start_time
             logger.error(f"Failed to delete scene in {elapsed:.2f}s: {str(e)}", exc_info=True)
+            raise
+
+    async def get_scenes_by_story_id(self, story_id: Union[str, UUID]) -> List[Dict[str, Any]]:
+        """Get all scenes for a story ordered by sequence
+        
+        Args:
+            story_id: The ID of the story to get scenes for
+            
+        Returns:
+            List of scene dictionaries ordered by sequence
+            
+        Raises:
+            Exception: If scene retrieval fails
+        """
+        start_time = time.time()
+        story_id_str = str(story_id)
+        
+        self._log_operation("select", "scenes", filters={"story_id": story_id_str})
+        logger.info(f"Getting scenes for story with ID: {story_id_str}")
+        
+        try:
+            response = self.client.table("scenes").select("*").eq("story_id", story_id_str).order("sequence").execute()
+            scenes = response.data if response.data else []
+            
+            elapsed = time.time() - start_time
+            logger.info(f"Retrieved {len(scenes)} scenes in {elapsed:.2f}s for story: {story_id_str}")
+            return scenes
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"Failed to get scenes in {elapsed:.2f}s: {str(e)}", exc_info=True)
             raise
     
     async def batch_insert_scenes(self, scenes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -196,7 +244,7 @@ class SceneRepository(SupabaseBaseClient):
         logger.info(f"Batch inserting {len(scenes)} scenes")
         
         try:
-            response = self.client.table("scenes").insert(scenes).execute()
+            response = await self.client.table("scenes").insert(scenes).execute()
             created_scenes = response.data if response.data else []
             
             elapsed = time.time() - start_time

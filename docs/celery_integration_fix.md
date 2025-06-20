@@ -115,12 +115,12 @@ class StorageService:
 
 ```python
 class StoryService:
-    def __init__(self, db_client, storage_service):
-        self.db_client = db_client
+    def __init__(self, story_client, storage_service):
+        self.story_client = story_client
         self.storage_service = storage_service
 
     async def create_new_story(self, request: StoryRequest):
-        story = await self.db_client.create_story(
+        story = await self.story_client.create_story(
             title=request.title,
             prompt=request.prompt,
             user_id=request.user_id
@@ -140,7 +140,7 @@ class StoryService:
 
         story.created_at = story.created_at or datetime.utcnow()
         story.updated_at = datetime.utcnow()
-        await self.db_client.update_story(story.id, scenes=scenes)
+        await self.story_client.update_story(story.id, scenes=scenes)
 
         return story
 ```

@@ -5,7 +5,7 @@ import logging
 
 from app.models.user import User, UserCreate, UserResponse, UserStoriesResponse
 from app.services.story_service import StoryService
-from app.database.supabase_client import UserRepository
+from app.database.supabase_client import UserRepository, StoryRepository, SceneRepository
 
 # Create a logger for this module
 logger = logging.getLogger(__name__)
@@ -19,9 +19,13 @@ async def get_user_repository() -> UserRepository:
     return UserRepository()
 
 # Dependency to get a StoryService instance
-async def get_story_service() -> StoryService:
+async def get_story_service(
+    story_client: StoryRepository = Depends(StoryRepository),
+    scene_client: SceneRepository = Depends(SceneRepository),
+    user_client: UserRepository = Depends(UserRepository)
+) -> StoryService:
     """Dependency to get a StoryService instance"""
-    return StoryService()
+    return StoryService(story_client, scene_client, user_client)
 
 @router.post("/", response_model=UserResponse, status_code=201, tags=["users"], summary="Create User", description="Create a new user.")
 async def create_user(

@@ -4,7 +4,7 @@ import logging
 from typing import Dict, List, Any, Optional
 from uuid import UUID
 
-from app.database.supabase_client import StoryRepository
+from app.database.supabase_client import StoryRepository, SceneRepository, UserRepository
 from app.models.story_types import StoryRequest, StoryResponse, StoryStatus, StoryDetail, Scene
 from app.models.user import UserResponse
 from app.tasks.generate_story_task import generate_story_task
@@ -17,8 +17,10 @@ logger = logging.getLogger(__name__)
 class StoryService:
     """Service for orchestrating story creation and management"""
 
-    def __init__(self, db_client: StoryRepository):
-        self.db_client = db_client
+    def __init__(self, story_client: StoryRepository, scene_client: SceneRepository, user_client: UserRepository):
+        self.story_client = story_client
+        self.scene_client = scene_client
+        self.user_client = user_client
 
     async def create_new_story(self, request: StoryRequest) -> Dict[str, Any]:
         """
@@ -28,7 +30,7 @@ class StoryService:
         logger.info(f"Creating new story with title: {request.title}, prompt: {request.prompt[:50]}..., user_id: {request.user_id}")
         try:
             logger.debug("Creating story record in database")
-            story = await self.db_client.create_story(
+            story = await self.story_client.create_story(
                 title=request.title,
                 prompt=request.prompt,
                 user_id=request.user_id
@@ -89,7 +91,7 @@ class StoryService:
         start_time = time.time()
 
         try:
-            story = await self.db_client.get_story(story_id)
+            story = await self.story_client.get_story(story_id)
             if not story:
                 logger.warning(f"Story with ID {story_id} not found")
                 raise Exception(f"Story with ID {story_id} not found")
@@ -112,14 +114,15 @@ class StoryService:
         start_time = time.time()
 
         try:
-            story = await self.db_client.get_story(story_id)
+            story = await self.story_client.get_story(story_id)
             if not story:
                 logger.warning(f"Story with ID {story_id} not found")
                 raise Exception(f"Story with ID {story_id} not found")
 
             logger.debug(f"Retrieving scenes for story ID: {story_id}")
-            scenes_data = await self.db_client.get_story_scenes(story_id)
+            scenes_data = await self.scene_client.get_scenes_by_story_id(story_id)
             scenes = [Scene(**scene_data) for scene_data in scenes_data]
+            logger.debug(f"Retrieved {len(scenes)} scenes for story ID: {story_id}")
 
             logger.debug(f"Retrieved {len(scenes)} scenes for story ID: {story_id}")
 
@@ -149,7 +152,7 @@ class StoryService:
         start_time = time.time()
 
         try:
-            stories = await self.db_client.get_user_stories(user_id)
+            stories = await self.user_client.get_user_stories(user_id)
 
             elapsed = time.time() - start_time
             logger.info(f"Retrieved {len(stories)} stories for user ID: {user_id} in {elapsed:.2f}s")
@@ -165,7 +168,7 @@ class StoryService:
         start_time = time.time()
 
         try:
-            stories = await self.db_client.search_stories(search_term, limit)
+            stories = await self.story_client.search_stories(search_term, limit)
 
             elapsed = time.time() - start_time
             logger.info(f"Found {len(stories)} stories matching search term: {search_term} in {elapsed:.2f}s")
@@ -181,7 +184,7 @@ class StoryService:
         start_time = time.time()
 
         try:
-            stories = await self.db_client.get_recent_stories(limit)
+            stories = await self.story_client.get_recent_stories(limit)
 
             elapsed = time.time() - start_time
             logger.info(f"Retrieved {len(stories)} recent stories in {elapsed:.2f}s")
@@ -197,17 +200,17 @@ class StoryService:
         start_time = time.time()
 
         try:
-            story = await self.db_client.get_story(story_id)
+            story = await self.story_client.get_story(story_id)
             if not story:
                 logger.warning(f"Story with ID {story_id} not found for deletion")
                 return False
 
             try:
-                await self.db_client.delete_story_files(story_id)
+                await self.story_repository.delete_story_files(story_id)
             except Exception as file_error:
                 logger.warning(f"Error deleting story files: {str(file_error)}", exc_info=True)
 
-            success = await self.db_client.delete_story(story_id)
+            success = await self.story_repository.delete_story(story_id)
 
             elapsed = time.time() - start_time
             if success:
@@ -227,12 +230,12 @@ class StoryService:
         start_time = time.time()
 
         try:
-            user = await self.db_client.get_user(user_id)
+            user = await self.user_client.get_user(user_id)
             if not user:
                 logger.warning(f"User with ID {user_id} not found for update")
                 return None
 
-            updated_user = await self.db_client.update_user(user_id, data)
+            updated_user = await self.user_client.update_user(user_id, data)
 
             elapsed = time.time() - start_time
             if updated_user:
@@ -252,7 +255,7 @@ class StoryService:
         start_time = time.time()
 
         try:
-            success = await self.db_client.update_story_status(story_id, status)
+            success = await self.story_client.update_story_status(story_id, status)
 
             elapsed = time.time() - start_time
             if success:

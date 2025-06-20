@@ -31,6 +31,11 @@ logger = logging.getLogger(__name__)
 class UserRepository(SupabaseBaseClient):
     """Repository for user-related operations"""
     
+    def __init__(self):
+        """Initialize the repository with a Supabase client instance"""
+        super().__init__()
+        logger.info("UserRepository initialized successfully")
+    
     async def create_user(self, email: str, username: str) -> Dict[str, Any]:
         """Create a new user in the database with retry logic
         
@@ -63,7 +68,7 @@ class UserRepository(SupabaseBaseClient):
         
         for attempt in range(max_retries):
             try:
-                response = await self.client.table("users").insert(user_data).execute()
+                response = self.client.table("users").insert(user_data).execute()
                 
                 if not response.data:
                     logger.error(f"Failed to create user: No data returned from database")
@@ -110,7 +115,7 @@ class UserRepository(SupabaseBaseClient):
         logger.info(f"Getting user with ID: {user_id_str}")
         
         try:
-            response = self.client.table("users").select("*").eq("user_id", user_id_str).execute()
+            response = await self.client.table("users").select("*").eq("user_id", user_id_str).execute()
             
             if not response.data:
                 logger.warning(f"User not found with ID: {user_id_str}")
@@ -144,7 +149,7 @@ class UserRepository(SupabaseBaseClient):
         logger.info(f"Updating user with ID: {user_id_str}, fields: {list(data.keys())}")
         
         try:
-            response = self.client.table("users").update(data).eq("user_id", user_id_str).execute()
+            response = await self.client.table("users").update(data).eq("user_id", user_id_str).execute()
             
             if not response.data:
                 logger.warning(f"User update failed, no data returned: {user_id_str}")
@@ -158,40 +163,59 @@ class UserRepository(SupabaseBaseClient):
             logger.error(f"Failed to update user in {elapsed:.2f}s: {str(e)}", exc_info=True)
             raise
     
-    async def delete_user(self, user_id: Union[str, UUID]) -> bool:
-        """Delete a user from the database
+    async def delete_user(self, user_id: UUID) -> bool:
+        """Delete a user from the database with retry logic
         
         Args:
             user_id: The ID of the user to delete
             
         Returns:
-            True if deletion was successful, False otherwise
+            True if the user was successfully deleted, False otherwise
             
         Raises:
-            Exception: If user deletion fails
+            APIError: If the API returns an error
         """
-        start_time = time.time()
-        user_id_str = str(user_id)
-        
-        self._log_operation("delete", "users", filters={"user_id": user_id_str})
-        logger.info(f"Deleting user with ID: {user_id_str}")
-        
         try:
-            response = self.client.table("users").delete().eq("user_id", user_id_str).execute()
-            success = bool(response.data)
-            
-            elapsed = time.time() - start_time
-            if success:
-                logger.info(f"User deleted successfully in {elapsed:.2f}s: {user_id_str}")
-            else:
-                logger.warning(f"User deletion returned no data in {elapsed:.2f}s: {user_id_str}")
+            logger.info(f"Attempting to delete user with ID: {user_id}")
+            result = self.client.table("users").delete().eq("user_id", str(user_id)).execute()
+            logger.info(f"Delete result: {result}")
+            return bool(result.data)
                 
-            return success
         except Exception as e:
-            elapsed = time.time() - start_time
-            logger.error(f"Failed to delete user in {elapsed:.2f}s: {str(e)}", exc_info=True)
+            logger.error(f"Error deleting user with ID {user_id}: {str(e)}", exc_info=True)
+            raise APIError(f"Error deleting user: {str(e)}")
+
+    async def get_user_stories(self, user_id: UUID) -> List[Dict[str, Any]]:
+        """Get all stories associated with a user
+        
+        Args:
+            user_id: The ID of the user to get stories for
+            
+        Returns:
+            List of story dictionaries associated with the user
+            
+        Raises:
+            NotFoundError: If no stories are found for the user
+            APIError: If there's an error fetching the stories
+        """
+        try:
+            logger.info(f"Fetching stories for user ID: {user_id}")
+            result = self.client.table("stories").select("*").eq("user_id", str(user_id)).execute()
+            
+            if not result.data:
+                raise NotFoundError(f"No stories found for user ID: {user_id}")
+            
+            logger.info(f"Found {len(result.data)} stories for user ID: {user_id}")
+            return result.data
+            
+        except NotFoundError as e:
+            logger.warning(f"No stories found for user ID {user_id}: {str(e)}")
             raise
-    
+            
+        except Exception as e:
+            logger.error(f"Error fetching stories for user ID {user_id}: {str(e)}", exc_info=True)
+            raise APIError(f"Error fetching stories: {str(e)}")
+
     async def get_users(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         """Get a list of users with pagination
         
@@ -211,7 +235,7 @@ class UserRepository(SupabaseBaseClient):
         logger.info(f"Getting users with limit: {limit}, offset: {offset}")
         
         try:
-            response = self.client.table("users").select("*").range(offset, offset + limit - 1).execute()
+            response = await self.client.table("users").select("*").range(offset, offset + limit - 1).execute()
             users = response.data if response.data else []
             
             elapsed = time.time() - start_time
