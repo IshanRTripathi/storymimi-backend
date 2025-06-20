@@ -5,34 +5,179 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 from uuid import UUID, uuid4
 
-from app.database.supabase_client import StoryRepository, SceneRepository, StorageService
+from app.database.supabase_client import StoryRepository, SceneRepository, StorageService, UserRepository
 from app.models.story_types import StoryStatus, StoryRequest, StoryResponse, Scene, StoryDetail
 from app.services.ai_service import AIService
 from app.services.story_extractor import StoryExtractor
 from app.services.story_processor import StoryProcessor
 from app.services.story_prompt_service import StoryPromptService
-
 from app.utils.json_converter import JSONConverter
 from app.utils.validator import Validator
+
 logger = logging.getLogger(__name__)
 
 
-async def generate_story_async(story_id: str, request: StoryRequest, user_id: str) -> Dict[str, Any]:
-    """
-    Async function to generate a complete story with text, images, and audio.
+class StoryGenerator:
+    """Service for generating stories asynchronously"""
+    
+    def __init__(self, 
+                 story_client: StoryRepository,
+                 scene_client: SceneRepository,
+                 storage_service: StorageService,
+                 story_prompt_service: StoryPromptService,
+                 user_client: UserRepository):
+        self.story_client = story_client
+        self.scene_client = scene_client
+        self.storage_service = storage_service
+        self.story_prompt_service = story_prompt_service
+        self.user_client = user_client
 
-    Args:
-        story_id: The ID of the story to generate.
-        request: The StoryRequest object.
-        user_id: The ID of the user creating the story
+    async def generate_story(self, story_id: str, request: StoryRequest, user_id: str) -> Dict[str, Any]:
+        """
+        Async function to generate a complete story with text, images, and audio.
 
-    Returns:
-        A dictionary with the task result.
-    """
-    story_client = StoryRepository()
-    scene_client = SceneRepository()
-    storage_service = StorageService()
-    story_prompt_service = StoryPromptService()
+        Args:
+            story_id: The ID of the story to generate.
+            request: The StoryRequest object.
+            user_id: The ID of the user creating the story
+
+        Returns:
+            A dictionary with the task result.
+        """
+        try:
+            logger.info(f"[GENERATOR] Starting generation for story_id={story_id}")
+
+            # 1. Get existing story data (it should exist from create_new_story)
+            story_data = await self.story_client.get_story(story_id)
+            if not story_data:
+                raise ValueError(f"Story not found: {story_id}")
+            logger.debug(f"[GENERATOR] Retrieved story data: {story_data}")
+
+            # 2. Call LLM to generate structured story metadata
+            # (This replaces the initial generate_story call to AIService)
+            structured_story_metadata = await self.story_prompt_service.generate_structured_story(request.prompt)
+            logger.info(f"[GENERATOR] Structured story metadata generated for story_id={story_id}")
+            logger.debug(f"[GENERATOR] Generated story metadata: {structured_story_metadata}")
+
+            # 3. Update the story in DB with story_metadata (write-once)
+            if not isinstance(user_id, UUID):
+                user_id = UUID(user_id)
+            await self.story_client.update_story(story_id, {"story_metadata": structured_story_metadata}, user_id=user_id)
+            logger.info(f"[GENERATOR] Story metadata saved for story_id={story_id}")
+
+            # Extract data from structured_story_metadata for further steps
+            story_metadata = structured_story_metadata.get("story_metadata", {})
+            scenes_data = story_metadata.get("scenes", [])
+            
+            # 4. Update story status to PROCESSING
+            await self.story_client.update_story_status(story_id, StoryStatus.PROCESSING, user_id=user_id)
+            logger.info(f"[GENERATOR] Story status updated to PROCESSING for story_id={story_id}")
+
+            # 5. Generate visual profile and base style (once per story)
+            visual_profile = await self.story_prompt_service.generate_visual_profile(story_metadata)
+            base_style = await self.story_prompt_service.generate_base_style(story_metadata)
+            logger.info(f"[GENERATOR] Generated visual profile and base style for story_id={story_id}")
+
+            # 6. Generate scenes in parallel
+            generated_scenes = []
+            for i, scene_data in enumerate(scenes_data):
+                current_scene = Scene(
+                    scene_id=str(uuid4()),
+                    story_id=story_id,
+                    sequence=i,
+                    title=scene_data.get("title", f"Scene {i + 1}"),
+                    description=scene_data.get("description", ""),
+                    prompt=scene_data.get("prompt", ""),
+                    image_prompt=scene_data.get("image_prompt", ""),
+                    audio_prompt=scene_data.get("audio_prompt", ""),
+                    status=StoryStatus.PROCESSING,
+                    created_at=datetime.utcnow().isoformat(),
+                    updated_at=datetime.utcnow().isoformat()
+                )
+                generated_scenes.append(current_scene)
+                
+                await process_single_scene(self.scene_client, self.storage_service, ai_service, story_id, i, current_scene)
+        
+            # Complete story with all generated scenes and updated data
+            return await complete_story(self.story_client, story_data, generated_scenes)
+
+        except Exception as e:
+            logger.exception(f"[GENERATOR] Error occurred for story_id={story_id}")
+            return await handle_story_error(self.story_client, story_id, e)
+
+async def process_single_scene(scene_client: SceneRepository, storage_service: StorageService, 
+                               ai_service: AIService, story_id: str, index: int, scene: Scene):
+    """Process a single scene including media generation and database storage."""
+    logger.info(f"[GENERATOR] Processing scene {index+1}")
+    
+    # Generate and store media first
+    try:
+        # Generate image
+        image_url = await ai_service.generate_image(scene.image_prompt)
+        if image_url:
+            scene.image_url = image_url
+            await storage_service.upload_image(story_id, index, image_url)
+            logger.info(f"[GENERATOR] Image generated and stored for scene {index + 1}")
+        
+        # Generate audio
+        audio_url = await ai_service.generate_audio(scene.audio_prompt)
+        if audio_url:
+            scene.audio_url = audio_url
+            await storage_service.upload_audio(story_id, index, audio_url)
+            logger.info(f"[GENERATOR] Audio generated and stored for scene {index + 1}")
+    except Exception as e:
+        logger.error(f"[GENERATOR] Failed to generate media for scene {index + 1}: {str(e)}", exc_info=True)
+        raise
+    
+    # Create and update scene in database with media URLs
+    await scene_client.create_scene(scene)
+    logger.info(f"[GENERATOR] Scene {index+1} created successfully in DB with media URLs")
+
+# Remove this function as it's redundant with process_single_scene
+# The media generation is already handled in process_single_scene
+# This function can be removed since it's not being used
+
+async def complete_story(story_client: StoryRepository, story_data: Dict[str, Any], scenes: List[Scene]) -> Dict[str, Any]:
+    """Complete story generation and return final response."""
+    logger.info(f"[GENERATOR] Completing story for story_id={story_data['story_id']}")
+    
+    # Update story status to COMPLETED
+    await story_client.update_story_status(story_data["story_id"], StoryStatus.COMPLETED)
+    
+    # Convert scenes to dictionaries before returning
+    scene_dicts = []
+    for scene in scenes:
+        scene_dict = scene.dict()
+        scene_dict["created_at"] = scene.created_at.isoformat()
+        scene_dict["updated_at"] = scene.updated_at.isoformat()
+        scene_dicts.append(scene_dict)
+    
+    return {
+        "story_id": story_data["story_id"],
+        "title": story_data["title"],
+        "prompt": story_data["prompt"],
+        "status": story_data["status"],
+        "created_at": story_data["created_at"],
+        "updated_at": story_data["updated_at"],
+        "story_metadata": story_data.get("story_metadata", {}),
+        "scenes": scene_dicts
+    }
+
+async def handle_story_error(story_client: StoryRepository, story_id: str, error: Exception) -> Dict[str, Any]:
+    """Handle story generation error and return error response."""
+    await story_client.update_story_status(story_id, StoryStatus.FAILED)
+    
+    # Get the actual story data from the database
+    story_data = await story_client.get_story(story_id)
+    
+    return {
+        "story_id": story_data["story_id"],
+        "title": story_data["title"],
+        "status": StoryStatus.FAILED,
+        "error": str(error),
+        "created_at": story_data["created_at"],
+        "updated_at": datetime.utcnow().isoformat()
+    }
 
     try:
         logger.info(f"[GENERATOR] Starting generation for story_id={story_id}")

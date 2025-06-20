@@ -8,7 +8,7 @@ import logging
 import sys
 
 from app.core.config.settings import settings
-from app.api import stories, users
+from app.api import stories, users, public_stories
 
 # Configure logging
 logging.basicConfig(
@@ -73,6 +73,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Include routers
 app.include_router(stories.router)
 app.include_router(users.router)
+app.include_router(public_stories.router)
 
 # Root endpoint
 @app.get("/", tags=["root"])

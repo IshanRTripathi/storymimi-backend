@@ -67,7 +67,7 @@ class PublicStoriesRepository(SupabaseBaseClient):
         query = query.order("created_at", desc=True).limit(limit).offset(offset)
         
         try:
-            response = await query.execute()
+            response = query.execute()
             stories = response.data if response.data else []
             
             elapsed = time.time() - start_time
@@ -91,7 +91,7 @@ class PublicStoriesRepository(SupabaseBaseClient):
         story_id_str = str(story_id)
         
         try:
-            response = await self.client.table("public_stories").select("*").eq("id", story_id_str).eq("published", True).execute()
+            response = self.client.table("public_stories").select("*").eq("id", story_id_str).eq("published", True).execute()
             story = response.data[0] if response.data else None
             
             elapsed = time.time() - start_time
@@ -119,7 +119,7 @@ class PublicStoriesRepository(SupabaseBaseClient):
         story_id_str = str(story_id)
         
         try:
-            response = await self.client.table("public_stories").update({"view_count": "view_count + 1"}).eq("id", story_id_str).eq("published", True).execute()
+            response = self.client.table("public_stories").update({"view_count": "view_count + 1"}).eq("id", story_id_str).eq("published", True).execute()
             success = bool(response.data)
             
             elapsed = time.time() - start_time

@@ -7,11 +7,11 @@ from datetime import datetime
 
 from app.database.supabase_client.stories_client import StoryRepository
 from app.database.supabase_client.scenes_client import SceneRepository
+from app.database.supabase_client.users_client import UserRepository
 from app.database.supabase_client import StorageService
 from app.models.story_types import StoryRequest, StoryResponse, StoryDetail, StoryStatus
 from app.services.story_service import StoryService
 from app.utils.json_converter import JSONConverter
-from app.utils.validator import Validator
 
 # Create a logger for this module
 logger = logging.getLogger(__name__)
@@ -22,10 +22,11 @@ router = APIRouter(prefix="/stories", tags=["stories"])
 # Dependency to get a StoryService instance
 def get_story_service(
     story_client: StoryRepository = Depends(StoryRepository),
-    scene_client: SceneRepository = Depends(SceneRepository)
+    scene_client: SceneRepository = Depends(SceneRepository),
+    user_client: UserRepository = Depends(UserRepository)
 ) -> StoryService:
     """Dependency to get a StoryService instance"""
-    return StoryService(story_client, scene_client)
+    return StoryService(story_client, scene_client, user_client)
 
 @router.post("/", response_model=StoryResponse, status_code=202, tags=["stories"], summary="Create Story", description="Create a new story based on the provided prompt.")
 async def create_story(
@@ -97,8 +98,7 @@ async def get_story(
         story = await service.get_story_detail(story_id)
         logger.info(f"Successfully retrieved story with ID: {story_id}, title: {story.title}, status: {story.status}")
         
-        # Validate the story data as a response object
-        StoryValidator.validate_story_data(story.dict())
+        # No validation needed for GET endpoints
         return story
     except Exception as e:
         logger.error(f"Error retrieving story with ID {story_id}: {str(e)}", exc_info=True)

@@ -27,7 +27,14 @@ class Scene(BaseModel):
     sequence: int = Field(info={"description": "Sequence number of the scene in the story"})
     title: str = Field(min_length=1, max_length=200, info={"description": "Scene title"})
     text: str = Field(min_length=1, max_length=5000, info={"description": "Scene text"})
-    image_prompt: str = Field(min_length=1, info={"description": "Prompt for generating scene image"})
+    image_prompt: Optional[str] = Field(
+        default=None,
+        info={"description": "Prompt for generating scene image"}
+    )
+    audio_prompt: Optional[str] = Field(
+        default=None,
+        info={"description": "Prompt for generating scene audio"}
+    )
     image_url: Optional[str] = Field(
         default=None,
         pattern=r'^https?://[\w.-]+(?:/[\w.-]*)*\??$',
@@ -77,7 +84,7 @@ class StoryDetail(BaseModel):
     user_id: UUID = Field(info={"description": "User ID"})
     created_at: datetime = Field(info={"description": "Creation timestamp"})
     updated_at: datetime = Field(info={"description": "Last update timestamp"})
-    story_metadata: Optional[Dict[str, Any]] = Field(default=None, info={"description": "LLM-generated structured story metadata"})
+    story_metadata: Optional[Dict[str, Any]] = Field(default=None, info={"description": "LLM-generated structured story metadata"}, exclude=True)
 
 
 class SceneImagePrompt(BaseModel):

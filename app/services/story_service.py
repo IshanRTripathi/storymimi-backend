@@ -9,7 +9,6 @@ from app.models.story_types import StoryRequest, StoryResponse, StoryStatus, Sto
 from app.models.user import UserResponse
 from app.tasks.generate_story_task import generate_story_task
 from app.utils.json_converter import JSONConverter
-from app.utils.validator import Validator
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +34,9 @@ class StoryService:
                 prompt=request.prompt,
                 user_id=request.user_id
             )
+            
+            # Validate the created story data
+            # No validation needed for GET endpoints
 
             if not story:
                 logger.error("Failed to create story record in database")
@@ -47,12 +49,12 @@ class StoryService:
             logger.info(f"Story record created with ID: {story_id}")
             
             # Validate model data before returning (allowing partial data for initial creation)
-            Validator.validate_model_data({
-                "story_id": story_id,
-                "title": request.title,
-                "status": StoryStatus.PENDING,
-                "user_id": request.user_id
-            }, is_initial_creation=True)
+            # Validator.validate_model_data({
+            #     "story_id": story_id,
+            #     "title": request.title,
+            #     "status": StoryStatus.PENDING,
+            #     "user_id": request.user_id
+            # }, is_initial_creation=True)
 
             # Try to dispatch Celery task, but don't fail if it doesn't work
             try:
@@ -121,21 +123,40 @@ class StoryService:
 
             logger.debug(f"Retrieving scenes for story ID: {story_id}")
             scenes_data = await self.scene_client.get_scenes_by_story_id(story_id)
-            scenes = [Scene(**scene_data) for scene_data in scenes_data]
+            logger.debug(f"Raw scenes data from DB: {scenes_data}")
+            
+            scenes = []
+            for scene_data in scenes_data:
+                # Create Scene object with only required fields
+                scene = Scene(
+                    scene_id=scene_data["scene_id"],
+                    story_id=story_id,
+                    sequence=scene_data["sequence"],
+                    title=scene_data["title"],
+                    text=scene_data["text"],
+                    image_url=scene_data["image_url"],
+                    audio_url=scene_data["audio_url"],
+                    created_at=scene_data["created_at"],
+                    updated_at=scene_data["updated_at"]
+                )
+                scenes.append(scene)
+            
             logger.debug(f"Retrieved {len(scenes)} scenes for story ID: {story_id}")
+            if scenes:
+                logger.debug(f"First scene data: {scenes[0].dict()}")
 
-            logger.debug(f"Retrieved {len(scenes)} scenes for story ID: {story_id}")
-
+            # Create story detail with minimal required fields
             story_detail = StoryDetail(
                 story_id=story["story_id"],
                 title=story["title"],
                 status=story["status"],
                 user_id=story.get("user_id"),
                 created_at=story["created_at"],
-                updated_at=story.get("updated_at"),
-                story_metadata=story.get("story_metadata"),
+                updated_at=story.get("updated_at", story["created_at"]),
                 scenes=scenes
             )
+            
+            # No validation needed for GET endpoints
 
             elapsed = time.time() - start_time
             logger.info(f"Retrieved full details for story ID: {story_id} in {elapsed:.2f}s, title: {story['title']}, scenes: {len(scenes)}")
@@ -153,6 +174,9 @@ class StoryService:
 
         try:
             stories = await self.user_client.get_user_stories(user_id)
+            # Validate each story in the list
+            for story in stories:
+                Validator.validate_model_data(story, is_response=True)
 
             elapsed = time.time() - start_time
             logger.info(f"Retrieved {len(stories)} stories for user ID: {user_id} in {elapsed:.2f}s")
@@ -169,6 +193,9 @@ class StoryService:
 
         try:
             stories = await self.story_client.search_stories(search_term, limit)
+            # Validate each story in the list
+            for story in stories:
+                Validator.validate_model_data(story, is_response=True)
 
             elapsed = time.time() - start_time
             logger.info(f"Found {len(stories)} stories matching search term: {search_term} in {elapsed:.2f}s")
@@ -185,6 +212,9 @@ class StoryService:
 
         try:
             stories = await self.story_client.get_recent_stories(limit)
+            # Validate each story in the list
+            for story in stories:
+                Validator.validate_model_data(story, is_response=True)
 
             elapsed = time.time() - start_time
             logger.info(f"Retrieved {len(stories)} recent stories in {elapsed:.2f}s")

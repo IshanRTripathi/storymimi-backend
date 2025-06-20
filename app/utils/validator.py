@@ -82,8 +82,8 @@ class Validator:
         logger.info("[VALIDATOR] All required fields present, proceeding with type validation")
         
         # Validate field types
-        if not isinstance(data["story_id"], str):
-            raise ValueError("Story ID must be a string")
+        if not isinstance(data["story_id"], (str, UUID)):
+            raise ValueError("Story ID must be a string or UUID")
             
         if not isinstance(data["user_id"], (str, UUID)):
             raise ValueError("User ID must be a string or UUID")
@@ -93,9 +93,20 @@ class Validator:
             if "created_at" not in data or "updated_at" not in data:
                 raise ValueError("Timestamps are required for non-initial creation")
             
-            # Validate timestamps are strings
-            if not isinstance(data["created_at"], str) or not isinstance(data["updated_at"], str):
-                raise ValueError("Timestamps must be strings")
+            # Check if timestamps are datetime objects
+            if not isinstance(data["created_at"], (str, datetime)):
+                raise ValueError("created_at must be a string or datetime")
+            if not isinstance(data["updated_at"], (str, datetime)):
+                raise ValueError("updated_at must be a string or datetime")
+            
+            # Validate timestamps can be converted to ISO format
+            try:
+                if isinstance(data["created_at"], datetime):
+                    data["created_at"] = data["created_at"].isoformat()
+                if isinstance(data["updated_at"], datetime):
+                    data["updated_at"] = data["updated_at"].isoformat()
+            except Exception as e:
+                raise ValueError(f"Failed to convert timestamp to ISO format: {str(e)}")
                 
             # Validate timestamps are valid ISO format strings
             try:

@@ -63,7 +63,7 @@ class SceneRepository(SupabaseBaseClient):
         logger.info(f"Creating scene with ID: {scene_id_str}")
         
         try:
-            response = await self.client.table("scenes").insert(scene_data).execute()
+            response = self.client.table("scenes").insert(scene_data).execute()
             
             if not response.data:
                 logger.error(f"Failed to create scene: No data returned from database")
@@ -96,7 +96,7 @@ class SceneRepository(SupabaseBaseClient):
         logger.info(f"Getting scene with ID: {scene_id_str}")
         
         try:
-            response = await self.client.table("scenes").select("*").eq("scene_id", scene_id_str).execute()
+            response = self.client.table("scenes").select("*").eq("scene_id", scene_id_str).execute()
             
             if not response.data:
                 logger.warning(f"Scene not found with ID: {scene_id_str}")
@@ -172,7 +172,7 @@ class SceneRepository(SupabaseBaseClient):
                 await self._delete_file(scene["audio_url"])
                 
             # Delete the scene record
-            response = await self.client.table("scenes").delete().eq("scene_id", scene_id_str).execute()
+            response = self.client.table("scenes").delete().eq("scene_id", scene_id_str).execute()
             success = bool(response.data)
             
             elapsed = time.time() - start_time
@@ -206,7 +206,19 @@ class SceneRepository(SupabaseBaseClient):
         logger.info(f"Getting scenes for story with ID: {story_id_str}")
         
         try:
-            response = self.client.table("scenes").select("*").eq("story_id", story_id_str).order("sequence").execute()
+            # Use a read-only query with explicit field selection
+            query = self.client.table("scenes").select(
+                "scene_id",
+                "story_id",
+                "sequence",
+                "title",
+                "text",
+                "image_url",
+                "audio_url",
+                "created_at",
+                "updated_at"
+            ).eq("story_id", story_id_str).order("sequence")
+            response = query.execute()
             scenes = response.data if response.data else []
             
             elapsed = time.time() - start_time
@@ -244,7 +256,7 @@ class SceneRepository(SupabaseBaseClient):
         logger.info(f"Batch inserting {len(scenes)} scenes")
         
         try:
-            response = await self.client.table("scenes").insert(scenes).execute()
+            response = self.client.table("scenes").insert(scenes).execute()
             created_scenes = response.data if response.data else []
             
             elapsed = time.time() - start_time

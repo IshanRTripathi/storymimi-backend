@@ -6,6 +6,7 @@ import logging
 from app.models.user import User, UserCreate, UserResponse, UserStoriesResponse
 from app.services.story_service import StoryService
 from app.database.supabase_client import UserRepository, StoryRepository, SceneRepository
+from app.utils.validator import Validator
 
 # Create a logger for this module
 logger = logging.getLogger(__name__)
@@ -40,12 +41,14 @@ async def create_user(
             logger.error("Failed to create user: No result returned from database")
             raise HTTPException(status_code=500, detail="Failed to create user")
         logger.info(f"User created successfully with ID: {result['user_id']}")
-        return UserResponse(
+        user_response = UserResponse(
             user_id=result["user_id"],
             email=result["email"],
             username=result["username"],
             created_at=result["created_at"]
         )
+        Validator.validate_model_data(user_response.dict(), is_response=True)
+        return user_response
     except Exception as e:
         logger.error(f"Error creating user: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -63,12 +66,14 @@ async def get_user(
             logger.warning(f"User with ID {user_id} not found")
             raise HTTPException(status_code=404, detail=f"User with ID {user_id} not found")
         logger.info(f"Successfully retrieved user with ID: {user_id}, username: {user['username']}")
-        return UserResponse(
+        user_response = UserResponse(
             user_id=user["user_id"],
             email=user["email"],
             username=user["username"],
             created_at=user["created_at"]
         )
+        # No validation needed for GET endpoints
+        return user_response
     except HTTPException:
         raise
     except Exception as e:
@@ -115,12 +120,14 @@ async def update_user(
             logger.warning(f"User with ID {user_id} not found for update")
             raise HTTPException(status_code=404, detail=f"User with ID {user_id} not found")
         logger.info(f"User updated successfully: {user_id}")
-        return UserResponse(
+        user_response = UserResponse(
             user_id=updated_user["user_id"],
             email=updated_user["email"],
             username=updated_user["username"],
             created_at=updated_user["created_at"]
         )
+        Validator.validate_model_data(user_response.dict(), is_response=True)
+        return user_response
     except HTTPException:
         raise
     except Exception as e:

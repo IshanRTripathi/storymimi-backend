@@ -115,7 +115,7 @@ class UserRepository(SupabaseBaseClient):
         logger.info(f"Getting user with ID: {user_id_str}")
         
         try:
-            response = await self.client.table("users").select("*").eq("user_id", user_id_str).execute()
+            response = self.client.table("users").select("*").eq("user_id", user_id_str).execute()
             
             if not response.data:
                 logger.warning(f"User not found with ID: {user_id_str}")
@@ -149,7 +149,7 @@ class UserRepository(SupabaseBaseClient):
         logger.info(f"Updating user with ID: {user_id_str}, fields: {list(data.keys())}")
         
         try:
-            response = await self.client.table("users").update(data).eq("user_id", user_id_str).execute()
+            response = self.client.table("users").update(data).eq("user_id", user_id_str).execute()
             
             if not response.data:
                 logger.warning(f"User update failed, no data returned: {user_id_str}")
@@ -235,7 +235,7 @@ class UserRepository(SupabaseBaseClient):
         logger.info(f"Getting users with limit: {limit}, offset: {offset}")
         
         try:
-            response = await self.client.table("users").select("*").range(offset, offset + limit - 1).execute()
+            response = self.client.table("users").select("*").range(offset, offset + limit - 1).execute()
             users = response.data if response.data else []
             
             elapsed = time.time() - start_time
