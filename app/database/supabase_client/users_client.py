@@ -185,6 +185,40 @@ class UserRepository(SupabaseBaseClient):
             logger.error(f"Error deleting user with ID {user_id}: {str(e)}", exc_info=True)
             raise APIError(f"Error deleting user: {str(e)}")
 
+    async def update_user_cover_image(self, user_id: Union[str, UUID], cover_image_url: str) -> bool:
+        """Update a user's cover image URL
+        
+        Args:
+            user_id: The ID of the user to update
+            cover_image_url: The URL of the cover image
+            
+        Returns:
+            True if the cover image was successfully updated, False otherwise
+            
+        Raises:
+            Exception: If cover image update fails
+        """
+        start_time = time.time()
+        user_id_str = str(user_id)
+        
+        self._log_operation("update", "users", {"cover_image_url": cover_image_url}, filters={"user_id": user_id_str})
+        logger.info(f"Updating cover image for user: {user_id_str}")
+        
+        try:
+            response = self.client.table("users").update({"cover_image_url": cover_image_url}).eq("user_id", user_id_str).execute()
+            
+            if not response.data:
+                logger.warning(f"Cover image update failed, no data returned: {user_id_str}")
+                return False
+                
+            elapsed = time.time() - start_time
+            logger.info(f"Cover image updated successfully in {elapsed:.2f}s for user: {user_id_str}")
+            return True
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"Failed to update cover image in {elapsed:.2f}s: {str(e)}", exc_info=True)
+            raise
+
     async def get_user_stories(self, user_id: UUID) -> List[Dict[str, Any]]:
         """Get all stories associated with a user
         
