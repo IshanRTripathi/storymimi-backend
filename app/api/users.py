@@ -5,6 +5,8 @@ import logging
 
 from app.models.user import User, UserCreate, UserResponse, UserStoriesResponse
 from app.services.story_service import StoryService
+from app.services.user_service import UserService
+from app.database.supabase_client import StorageService
 from app.database.supabase_client import UserRepository, StoryRepository, SceneRepository
 from app.utils.validator import Validator
 
@@ -20,6 +22,15 @@ async def get_user_repository() -> UserRepository:
     return UserRepository()
 
 # Dependency to get a StoryService instance
+async def get_user_service(
+    user_repo: UserRepository = Depends(UserRepository),
+    story_repo: StoryRepository = Depends(StoryRepository),
+    scene_repo: SceneRepository = Depends(SceneRepository),
+    storage_service: StorageService = Depends(StorageService)
+) -> UserService:
+    """Dependency to get a UserService instance"""
+    return UserService(user_repo, story_repo, scene_repo, storage_service)
+
 async def get_story_service(
     story_client: StoryRepository = Depends(StoryRepository),
     scene_client: SceneRepository = Depends(SceneRepository),
@@ -78,6 +89,34 @@ async def get_user(
         raise
     except Exception as e:
         logger.error(f"Error retrieving user with ID {user_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{user_id}/stories", response_model=List[Dict[str, Any]], tags=["users"], summary="Get User Stories", description="Get all stories for a user.")
+
+@router.delete("/delete-account", tags=["users"], summary="Delete User Account", description="Delete user account and all associated data.")
+async def delete_account(
+    user_id: UUID,
+    email: str,
+    service: UserService = Depends(get_user_service)
+):
+    """
+    Delete user account and all associated data.
+    
+    Args:
+        user_id: UUID of the user to delete
+        email: Email address to validate ownership
+    
+    Returns:
+        dict: Success message or error details
+    """
+    try:
+        result = await service.delete_account(user_id, email)
+        return result
+    except ValueError as ve:
+        logger.error(f"Validation error during account deletion for {user_id}: {str(ve)}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Error deleting account for {user_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{user_id}/stories", response_model=List[Dict[str, Any]], tags=["users"], summary="Get User Stories", description="Get all stories for a user.")
