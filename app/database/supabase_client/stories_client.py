@@ -188,6 +188,61 @@ class StoryRepository(SupabaseBaseClient):
             elapsed = time.time() - start_time
             logger.error(f"Failed to update story in {elapsed:.2f}s: {str(e)}", exc_info=True)
             raise
+
+    async def update_story_cover_image_if_null(self, story_id: Union[str, UUID], cover_image_url: str) -> bool:
+        """Update a story's cover image only if it's currently null/empty
+        
+        Args:
+            story_id: The ID of the story to update
+            cover_image_url: The URL of the cover image
+            
+        Returns:
+            True if cover image was updated, False if already set or update failed
+            
+        Raises:
+            Exception: If cover image update fails
+        """
+        start_time = time.time()
+        story_id_str = str(story_id)
+        
+        logger.info(f"Checking and updating cover image for story: {story_id_str}")
+        
+        try:
+            # First, get the current story to check if cover image is already set
+            story_data = await self.get_story(story_id_str)
+            if not story_data:
+                logger.warning(f"Story not found: {story_id_str}")
+                return False
+            
+            # Check if cover image is already set
+            current_cover_image = story_data.get("cover_image_url")
+            if current_cover_image and current_cover_image.strip():
+                logger.info(f"Story {story_id_str} already has cover image: {current_cover_image}")
+                return False
+            
+            # Update cover image
+            update_data = {
+                "cover_image_url": cover_image_url,
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            self._log_operation("update", "stories", update_data, filters={"story_id": story_id_str})
+            logger.info(f"Setting cover image for story {story_id_str}: {cover_image_url}")
+            
+            response = self.client.table("stories").update(update_data).eq("story_id", story_id_str).execute()
+            
+            if not response.data:
+                logger.warning(f"Cover image update failed, no data returned: {story_id_str}")
+                return False
+                
+            elapsed = time.time() - start_time
+            logger.info(f"Cover image updated successfully in {elapsed:.2f}s for story: {story_id_str}")
+            return True
+            
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"Failed to update cover image in {elapsed:.2f}s: {str(e)}", exc_info=True)
+            raise
     
     async def delete_story(self, story_id: Union[str, UUID]) -> bool:
         """Delete a story and all its related scenes

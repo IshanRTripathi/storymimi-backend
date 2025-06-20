@@ -96,7 +96,7 @@ class StoryGenerator:
                 )
                 generated_scenes.append(current_scene)
                 
-                await process_single_scene(self.scene_client, self.storage_service, ai_service, story_id, i, current_scene)
+                await process_single_scene(self.scene_client, self.storage_service, ai_service, story_id, i, current_scene, self.story_client)
         
             # Complete story with all generated scenes and updated data
             return await complete_story(self.story_client, story_data, generated_scenes)
@@ -254,7 +254,7 @@ async def handle_story_error(story_client: StoryRepository, story_id: str, error
                 )
                 generated_scenes.append(current_scene)
                 
-                await process_single_scene(scene_client, storage_service, ai_service, story_id, i, current_scene)
+                await process_single_scene(scene_client, storage_service, ai_service, story_id, i, current_scene, story_client)
         
         # Complete story with all generated scenes and updated data
         return await complete_story(story_client, story_data, generated_scenes)
@@ -264,12 +264,12 @@ async def handle_story_error(story_client: StoryRepository, story_id: str, error
         return await handle_story_error(story_client, story_id, e)
 
 async def process_single_scene(scene_client: SceneRepository, storage_service: StorageService, 
-                       ai_service: AIService, story_id: str, index: int, scene: Scene):
+                       ai_service: AIService, story_id: str, index: int, scene: Scene, story_client: StoryRepository = None):
     """Process a single scene including media generation and database storage."""
     logger.info(f"[GENERATOR] Processing scene {index+1}")
     
-    # Generate and upload media
-    await generate_and_store_media(storage_service, ai_service, story_id, index, scene)
+    # Generate and upload media (includes cover image update for first scene)
+    await generate_and_store_media(storage_service, ai_service, story_id, index, scene, story_client)
     
     # Create and update scene in database
     # The scene object already contains all fields including image_prompt
@@ -277,7 +277,7 @@ async def process_single_scene(scene_client: SceneRepository, storage_service: S
     logger.info(f"[GENERATOR] Scene {index+1} created successfully in DB")
 
 async def generate_and_store_media(storage_service: StorageService, ai_service: AIService, 
-                                 story_id: str, index: int, scene: Scene):
+                                 story_id: str, index: int, scene: Scene, story_client: StoryRepository = None):
     """Generate and store media (image and audio) for a scene."""
     # Generate and upload image
     logger.debug(f"[GENERATOR] Generating and uploading image for scene {index+1}")
@@ -286,6 +286,19 @@ async def generate_and_store_media(storage_service: StorageService, ai_service: 
         image_url = await storage_service.upload_image(story_id, index, image_bytes)
         scene.image_url = image_url
         logger.debug(f"[GENERATOR] Image URL: {image_url}")
+        
+        # Update story cover image if this is the first scene (index 0) and story_client is provided
+        if index == 0 and story_client and image_url:
+            try:
+                cover_updated = await story_client.update_story_cover_image_if_null(story_id, image_url)
+                if cover_updated:
+                    logger.info(f"[GENERATOR] Cover image set for story {story_id} from first scene")
+                else:
+                    logger.debug(f"[GENERATOR] Cover image already set for story {story_id}")
+            except Exception as cover_error:
+                logger.warning(f"[GENERATOR] Failed to update cover image for story {story_id}: {str(cover_error)}")
+                # Don't raise here - cover image update is not critical for story generation
+                
     except Exception as e:
         logger.error(f"[GENERATOR] Failed to process image: {str(e)}", exc_info=True)
         raise
@@ -331,6 +344,7 @@ async def complete_story(story_client: StoryRepository, story_data: Dict[str, An
         "status": StoryStatus.COMPLETED,
         "scenes": scene_dicts,
         "user_id": story_data["user_id"],
+        "cover_image_url": story_data.get("cover_image_url"),
         "created_at": story_data["created_at"],
         "updated_at": story_data["updated_at"],
         "story_metadata": story_data.get("story_metadata", {})  # Include story_metadata from story_data
@@ -349,6 +363,7 @@ async def handle_story_error(story_client: StoryRepository, story_id: str, error
         "status": StoryStatus.FAILED,
         "scenes": [],
         "user_id": story_data["user_id"],
+        "cover_image_url": story_data.get("cover_image_url"),
         "created_at": story_data.get("created_at"),
         "updated_at": story_data.get("updated_at"),
         "story_metadata": story_data.get("story_metadata", {}),  # Include story_metadata

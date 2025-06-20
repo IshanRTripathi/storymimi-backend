@@ -65,6 +65,7 @@ class StoryResponse(BaseModel):
     error: Optional[str] = Field(default=None, info={"description": "Error message if present"})
     story_id: Optional[UUID] = Field(default=None, info={"description": "Story ID"})
     user_id: UUID = Field(info={"description": "User ID"})
+    cover_image_url: Optional[str] = Field(default=None, info={"description": "URL of the story cover image"})
     created_at: Optional[datetime] = Field(default=None, info={"description": "Creation timestamp"})
     updated_at: Optional[datetime] = Field(default=None, info={"description": "Last update timestamp"})
 
@@ -82,6 +83,7 @@ class StoryDetail(BaseModel):
     status: StoryStatus = Field(info={"description": "Current status of the story"})
     scenes: List[Scene] = Field(info={"description": "List of story scenes"})
     user_id: UUID = Field(info={"description": "User ID"})
+    cover_image_url: Optional[str] = Field(default=None, info={"description": "URL of the story cover image"})
     created_at: datetime = Field(info={"description": "Creation timestamp"})
     updated_at: datetime = Field(info={"description": "Last update timestamp"})
     story_metadata: Optional[Dict[str, Any]] = Field(default=None, info={"description": "LLM-generated structured story metadata"}, exclude=True)
