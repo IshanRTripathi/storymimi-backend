@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delete User - StoryMimi</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="icon" href="/static/favicon/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">StoryMimi</div>
+            <nav>
+                <ul>
+                    <li><a href="/static/index.html">Home</a></li>
+                    <li><a href="/static/create-user.html">Create User</a></li>
+                    <li><a href="/static/delete-user.html">Delete User</a></li>
+                    <li><a href="/static/create-story.html">Create Story</a></li>
+                    <li><a href="/docs">API Docs</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section style="max-width: 600px; margin: 2rem auto;">
+            <div class="card">
+                <div class="card-header">Delete User Account</div>
+                <div class="card-body">
+                    <div class="alert alert-warning" style="margin-bottom: 1rem;">
+                        <strong>⚠️ Warning:</strong> This action cannot be undone. Deleting a user will permanently remove their account and all associated stories.
+                    </div>
+                    <form id="delete-user-form">
+                        <div class="form-group">
+                            <label for="user_id">User ID</label>
+                            <input type="text" class="form-control" id="user_id" name="user_id" required 
+                                   placeholder="Enter the UUID of the user to delete">
+                            <small class="form-text text-muted">Example: 9a0a594c-2699-400b-89e0-4a4ef78ced97</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Email Confirmation</label>
+                            <input type="email" class="form-control" id="email" name="email" required
+                                   placeholder="Enter the user's email to confirm deletion">
+                            <small class="form-text text-muted">This email must match the user's account email</small>
+                        </div>
+                        <div class="form-group">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="confirm_deletion" required>
+                                <label class="form-check-label" for="confirm_deletion">
+                                    I understand that this action is permanent and cannot be undone
+                                </label>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-danger">Delete User Account</button>
+                        <a href="/static/index.html" class="btn btn-secondary" style="margin-left: 1rem;">Cancel</a>
+                    </form>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2023 StoryMimi. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <div id="alert-container"></div>
+    <script src="/static/js/main.js"></script>
+</body>
+</html> 

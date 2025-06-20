@@ -54,6 +54,15 @@ function addEventListeners() {
             submitUserForm(this);
         });
     }
+    
+    // User deletion form submission
+    const deleteUserForm = document.getElementById('delete-user-form');
+    if (deleteUserForm) {
+        deleteUserForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            submitDeleteUserForm(this);
+        });
+    }
 }
 
 /**
@@ -158,6 +167,75 @@ async function submitUserForm(form) {
     } catch (error) {
         console.error('Error creating user:', error);
         showAlert('Error creating user: ' + error.message, 'danger');
+        
+        // Reset button
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+    }
+}
+
+/**
+ * Submit the user deletion form via API
+ * @param {HTMLFormElement} form - The user deletion form
+ */
+async function submitDeleteUserForm(form) {
+    try {
+        const formData = new FormData(form);
+        const userId = formData.get('user_id');
+        const email = formData.get('email');
+        
+        // Additional confirmation dialog
+        const confirmDelete = confirm(
+            `Are you absolutely sure you want to delete this user account?\n\n` +
+            `User ID: ${userId}\n` +
+            `Email: ${email}\n\n` +
+            `This action CANNOT be undone and will delete all user data and stories.`
+        );
+        
+        if (!confirmDelete) {
+            return;
+        }
+        
+        // Show loading state
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Deleting User...';
+        
+        // Make API request using query parameters
+        const url = new URL('/users/delete-account', window.location.origin);
+        url.searchParams.append('user_id', userId);
+        url.searchParams.append('email', email);
+        
+        const response = await fetch(url, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: 'Unknown error occurred' }));
+            throw new Error(errorData.detail || 'Failed to delete user');
+        }
+        
+        const result = await response.json();
+        
+        // Show success message
+        showAlert('User account deleted successfully!', 'success');
+        
+        // Clear form
+        form.reset();
+        
+        // Redirect to home page after a delay
+        setTimeout(() => {
+            window.location.href = '/static/index.html';
+        }, 3000);
+        
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        showAlert('Error deleting user: ' + error.message, 'danger');
         
         // Reset button
         const submitBtn = form.querySelector('button[type="submit"]');
