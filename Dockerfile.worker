@@ -76,13 +76,8 @@ USER storymimi
 HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
     CMD /app/health_check.sh
 
-# Start Celery worker with optimized settings
-CMD ["celery", "-A", "app.core.celery_app:celery_app", "worker", \
-     "--loglevel=info", \
-     "--concurrency=2", \
-     "--max-tasks-per-child=100", \
-     "--time-limit=3600", \
-     "--soft-time-limit=3300", \
-     "--without-gossip", \
-     "--without-mingle", \
-     "--without-heartbeat"]
+# Expose port for health checks
+EXPOSE 8080
+
+# Start the worker with health check server
+CMD ["python", "worker_with_health.py"]
