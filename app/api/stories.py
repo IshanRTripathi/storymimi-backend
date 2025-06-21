@@ -7,19 +7,10 @@ from datetime import datetime
 from app.models.story_types import StoryRequest, StoryResponse, StoryDetail, StoryStatus, Scene
 from app.services.story_service import StoryService
 from app.services.ai_service import AIService
+from app.services.elevenlabs_service import ElevenLabsService
 from app.database.supabase_client import StoryRepository, SceneRepository, UserRepository, StorageService
 from app.utils.json_converter import JSONConverter
 from app.utils.validator import Validator
-
-# Optional import for ElevenLabs service
-try:
-    from app.services.elevenlabs_service import ElevenLabsService
-    ELEVENLABS_AVAILABLE = True
-except ImportError as e:
-    logger = logging.getLogger(__name__)
-    logger.warning(f"ElevenLabs service not available: {e}")
-    ELEVENLABS_AVAILABLE = False
-    ElevenLabsService = None
 
 # Create a logger for this module
 logger = logging.getLogger(__name__)
@@ -42,13 +33,9 @@ async def get_ai_service() -> AIService:
     return AIService()
 
 # Dependency to get an ElevenLabsService instance
-async def get_elevenlabs_service() -> Optional[ElevenLabsService]:
+async def get_elevenlabs_service() -> ElevenLabsService:
     """Dependency to get an ElevenLabsService instance"""
-    if ELEVENLABS_AVAILABLE and ElevenLabsService:
-        return ElevenLabsService()
-    else:
-        logger.warning("ElevenLabs service not available")
-        return None
+    return ElevenLabsService()
 
 @router.post("/", response_model=StoryResponse, status_code=202, tags=["stories"], summary="Create Story", description="Create a new story based on the provided prompt.")
 async def create_story(
@@ -390,7 +377,7 @@ async def create_story_from_elevenlabs_conversation(
     background_tasks: BackgroundTasks,
     story_service: StoryService = Depends(get_story_service),
     ai_service: AIService = Depends(get_ai_service),
-    elevenlabs_service: Optional[ElevenLabsService] = Depends(get_elevenlabs_service)
+    elevenlabs_service: ElevenLabsService = Depends(get_elevenlabs_service)
 ):
     """Create a story from ElevenLabs conversation by fetching the transcript.
     
@@ -399,7 +386,7 @@ async def create_story_from_elevenlabs_conversation(
         background_tasks: FastAPI background tasks
         story_service: StoryService instance
         ai_service: AIService instance
-        elevenlabs_service: ElevenLabsService instance (optional)
+        elevenlabs_service: ElevenLabsService instance
         
     Returns:
         Dict containing story creation status
@@ -433,7 +420,7 @@ async def create_story_from_elevenlabs_conversation(
             "user_id": user_id,
             "message": "Story creation from conversation transcript has been scheduled",
             "fetch_transcript": fetch_transcript,
-            "elevenlabs_available": elevenlabs_service is not None
+            "elevenlabs_available": True
         }
         
     except HTTPException:
@@ -450,7 +437,7 @@ async def process_elevenlabs_conversation(
     conversation_request: Dict[str, Any],
     story_service: StoryService,
     ai_service: AIService,
-    elevenlabs_service: Optional[ElevenLabsService]
+    elevenlabs_service: ElevenLabsService
 ):
     """Process ElevenLabs conversation to create a story.
     
@@ -458,7 +445,7 @@ async def process_elevenlabs_conversation(
         conversation_request: Request containing conversation details
         story_service: StoryService instance
         ai_service: AIService instance
-        elevenlabs_service: ElevenLabsService instance (optional)
+        elevenlabs_service: ElevenLabsService instance
     """
     try:
         conversation_id = conversation_request.get("conversation_id")
@@ -472,14 +459,12 @@ async def process_elevenlabs_conversation(
         
         # Fetch conversation transcript from ElevenLabs
         transcript = None
-        if fetch_transcript and elevenlabs_service:
+        if fetch_transcript:
             transcript = await elevenlabs_service.get_conversation_transcript(conversation_id, agent_id)
             if transcript:
                 logger.info(f"Successfully fetched transcript for conversation: {conversation_id}")
             else:
                 logger.warning(f"Could not fetch transcript for conversation: {conversation_id}")
-        elif fetch_transcript and not elevenlabs_service:
-            logger.warning("ElevenLabs service not available, skipping transcript fetch")
         
         # Generate title and prompt
         title = custom_title or f"Conversation Story - {conversation_id[:8]}"

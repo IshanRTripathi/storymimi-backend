@@ -13,8 +13,13 @@ class ElevenLabsService:
         self.base_url = "https://api.elevenlabs.io/v1"
         self.api_key = getattr(settings, 'ELEVENLABS_API_KEY', None)
         
-        if not self.api_key:
-            logger.warning("ElevenLabs API key not configured")
+        if self.api_key:
+            logger.info("ElevenLabs API key configured successfully")
+            # Mask the API key for logging (show first 4 and last 4 characters)
+            masked_key = f"{self.api_key[:4]}...{self.api_key[-4:]}" if len(self.api_key) > 8 else "***"
+            logger.debug(f"Using ElevenLabs API key: {masked_key}")
+        else:
+            logger.warning("ElevenLabs API key not configured - service will be limited")
     
     async def get_conversation_transcript(self, conversation_id: str, agent_id: str) -> Optional[str]:
         """Fetch conversation transcript from ElevenLabs API
@@ -31,6 +36,8 @@ class ElevenLabsService:
             return None
         
         try:
+            logger.info(f"Fetching transcript for conversation: {conversation_id}, agent: {agent_id}")
+            
             # This is a placeholder implementation
             # You'll need to check ElevenLabs API documentation for the actual endpoint
             url = f"{self.base_url}/conversations/{conversation_id}/transcript"
@@ -44,15 +51,19 @@ class ElevenLabsService:
                 "agent_id": agent_id
             }
             
+            logger.debug(f"Making request to: {url}")
+            
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=headers, params=params) as response:
                     if response.status == 200:
                         data = await response.json()
                         transcript = data.get("transcript", "")
                         logger.info(f"Successfully fetched transcript for conversation: {conversation_id}")
+                        logger.debug(f"Transcript length: {len(transcript)} characters")
                         return transcript
                     else:
-                        logger.error(f"Failed to fetch transcript: {response.status} - {await response.text()}")
+                        response_text = await response.text()
+                        logger.error(f"Failed to fetch transcript: {response.status} - {response_text}")
                         return None
                         
         except Exception as e:
@@ -74,6 +85,8 @@ class ElevenLabsService:
             return None
         
         try:
+            logger.info(f"Fetching summary for conversation: {conversation_id}, agent: {agent_id}")
+            
             # This is a placeholder implementation
             # You'll need to check ElevenLabs API documentation for the actual endpoint
             url = f"{self.base_url}/conversations/{conversation_id}/summary"
@@ -87,6 +100,8 @@ class ElevenLabsService:
                 "agent_id": agent_id
             }
             
+            logger.debug(f"Making request to: {url}")
+            
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=headers, params=params) as response:
                     if response.status == 200:
@@ -94,7 +109,8 @@ class ElevenLabsService:
                         logger.info(f"Successfully fetched summary for conversation: {conversation_id}")
                         return data
                     else:
-                        logger.error(f"Failed to fetch summary: {response.status} - {await response.text()}")
+                        response_text = await response.text()
+                        logger.error(f"Failed to fetch summary: {response.status} - {response_text}")
                         return None
                         
         except Exception as e:
@@ -115,6 +131,8 @@ class ElevenLabsService:
             return None
         
         try:
+            logger.info(f"Fetching metadata for conversation: {conversation_id}")
+            
             # This is a placeholder implementation
             # You'll need to check ElevenLabs API documentation for the actual endpoint
             url = f"{self.base_url}/conversations/{conversation_id}"
@@ -124,6 +142,8 @@ class ElevenLabsService:
                 "Content-Type": "application/json"
             }
             
+            logger.debug(f"Making request to: {url}")
+            
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=headers) as response:
                     if response.status == 200:
@@ -131,7 +151,8 @@ class ElevenLabsService:
                         logger.info(f"Successfully fetched metadata for conversation: {conversation_id}")
                         return data
                     else:
-                        logger.error(f"Failed to fetch metadata: {response.status} - {await response.text()}")
+                        response_text = await response.text()
+                        logger.error(f"Failed to fetch metadata: {response.status} - {response_text}")
                         return None
                         
         except Exception as e:
