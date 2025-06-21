@@ -7,17 +7,30 @@ import os
 import logging
 import sys
 
-from app.core.config.settings import settings
-from app.api import stories, users, public_stories
-
-# Configure logging
+# Configure logging first
 logging.basicConfig(
-    level=logging.DEBUG if settings.DEBUG else logging.INFO,
+    level=logging.DEBUG if os.getenv("DEBUG", "False").lower() == "true" else logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout)  # Only log to stdout for container/cloud
     ]
 )
+
+logger = logging.getLogger(__name__)
+
+try:
+    from app.core.config.settings import settings
+    logger.info("Settings imported successfully")
+except Exception as e:
+    logger.error(f"Failed to import settings: {str(e)}", exc_info=True)
+    raise
+
+try:
+    from app.api import stories, users, public_stories
+    logger.info("API modules imported successfully")
+except Exception as e:
+    logger.error(f"Failed to import API modules: {str(e)}", exc_info=True)
+    raise
 
 # Suppress Celery timer logs
 logging.getLogger('celery.timer').setLevel(logging.WARNING)
@@ -29,18 +42,20 @@ logging.getLogger('celery').setLevel(logging.INFO)
 logging.getLogger('hpack').setLevel(logging.WARNING)
 logging.getLogger('hpack.hpack').setLevel(logging.WARNING)
 
-# Create a logger for this module
-logger = logging.getLogger(__name__)
-
 # Create the FastAPI application
-app = FastAPI(
-    title="StoryMimi API",
-    description="API for generating stories with text, images, and audio using AI",
-    version="0.1.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json"
-)
+try:
+    app = FastAPI(
+        title="StoryMimi API",
+        description="API for generating stories with text, images, and audio using AI",
+        version="0.1.0",
+        docs_url="/docs",
+        redoc_url="/redoc",
+        openapi_url="/openapi.json"
+    )
+    logger.info("FastAPI app created successfully")
+except Exception as e:
+    logger.error(f"Failed to create FastAPI app: {str(e)}", exc_info=True)
+    raise
 
 # Add CORS middleware
 app.add_middleware(
@@ -68,12 +83,21 @@ async def add_process_time_header(request: Request, call_next):
         raise
 
 # Mount static files directory
-app.mount("/static", StaticFiles(directory="static"), name="static")
+try:
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+    logger.info("Static files mounted successfully")
+except Exception as e:
+    logger.warning(f"Failed to mount static files: {str(e)}")
 
 # Include routers
-app.include_router(stories.router)
-app.include_router(users.router)
-app.include_router(public_stories.router)
+try:
+    app.include_router(stories.router)
+    app.include_router(users.router)
+    app.include_router(public_stories.router)
+    logger.info("All routers included successfully")
+except Exception as e:
+    logger.error(f"Failed to include routers: {str(e)}", exc_info=True)
+    raise
 
 # Root endpoint
 @app.get("/", tags=["root"])
@@ -86,7 +110,7 @@ async def root():
 @app.get("/health", tags=["health"])
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy"}
+    return {"status": "healthy", "timestamp": time.time()}
 
 # Error handler for uncaught exceptions
 @app.exception_handler(Exception)
@@ -98,12 +122,19 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": f"An unexpected error occurred: {str(exc)}"},
     )
 
+logger.info("FastAPI application setup completed successfully")
+
 # Run the application
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "app.main:app",
-        host=settings.HOST,
-        port=settings.PORT,
-        reload=settings.DEBUG
-    )
+    try:
+        logger.info(f"Starting server on {settings.HOST}:{settings.PORT}")
+        uvicorn.run(
+            "app.main:app",
+            host=settings.HOST,
+            port=settings.PORT,
+            reload=settings.DEBUG
+        )
+    except Exception as e:
+        logger.error(f"Failed to start server: {str(e)}", exc_info=True)
+        sys.exit(1)

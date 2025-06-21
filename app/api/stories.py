@@ -2,17 +2,13 @@ from fastapi import APIRouter, HTTPException, Depends, Query, Body, BackgroundTa
 from typing import Dict, Any, List, Optional
 from uuid import UUID
 import logging
-import uuid
 from datetime import datetime
 
-from app.database.supabase_client.stories_client import StoryRepository
-from app.database.supabase_client.scenes_client import SceneRepository
-from app.database.supabase_client.users_client import UserRepository
-from app.database.supabase_client import StorageService
 from app.models.story_types import StoryRequest, StoryResponse, StoryDetail, StoryStatus, Scene
 from app.services.story_service import StoryService
 from app.services.ai_service import AIService
 from app.services.elevenlabs_service import ElevenLabsService
+from app.database.supabase_client import StoryRepository, SceneRepository, UserRepository, StorageService
 from app.utils.json_converter import JSONConverter
 from app.utils.validator import Validator
 
