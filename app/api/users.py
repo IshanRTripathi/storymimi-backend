@@ -77,7 +77,6 @@ async def get_user(
             headers={"error_code": "DATABASE_ERROR"}
         )
 
-
 @router.post("/", response_model=UserResponse, status_code=201, tags=["users"], summary="Create User", description="Create a new user using Firebase auth data.")
 async def create_user(
     user: UserCreate = Body(..., example={"user_id": "xHyXCebE7pdl8xPJ7g5n1jmS5WP2", "email": "cursordemo249@gmail.com", "display_name": "", "created_at": "2025-06-21T08:00:29.129451", "firebase_uid": "xHyXCebE7pdl8xPJ7g5n1jmS5WP2", "profile_source": "firebase_auth", "is_active": True, "metadata": {"additional_info": "any custom data"}}),
@@ -129,7 +128,6 @@ async def create_user(
             cover_image_url=result.get("cover_image_url"),
             metadata=result.get("metadata")
         )
-        # No validation needed for response models since Firebase provides validated data
         return user_response
     except HTTPException:
         raise
@@ -141,38 +139,40 @@ async def create_user(
             headers={"error_code": "DATABASE_ERROR"}
         )
 
-@router.get("/{user_id}", response_model=UserResponse, tags=["users"], summary="Get User", description="Get a user by ID.")
-async def get_user(
-    user_id: UUID,
-    user_repo: UserRepository = Depends(get_user_repository)
-):
-    """Get a user by their unique ID."""
-    logger.info(f"Getting user with ID: {user_id}")
-    try:
-        user = await user_repo.get_user(user_id)
-        if not user:
-            logger.warning(f"User with ID {user_id} not found")
-            raise HTTPException(status_code=404, detail=f"User with ID {user_id} not found")
-        logger.info(f"Successfully retrieved user with ID: {user_id}, username: {user['username']}")
-        user_response = UserResponse(
-            user_id=user["user_id"],
-            email=user["email"],
-            username=user["username"],
-            created_at=user["created_at"]
-        )
-        # No validation needed for GET endpoints
-        return user_response
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error retrieving user with ID {user_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
 @router.get("/{user_id}/stories", response_model=List[Dict[str, Any]], tags=["users"], summary="Get User Stories", description="Get all stories for a user.")
+async def get_user_stories(
+    user_id: str,
+    service: StoryService = Depends(get_story_service)
+):
+    """Get all stories for a user.
+    
+    Args:
+        user_id: Firebase user ID
+        service: StoryService instance
+        
+    Returns:
+        List[Dict[str, Any]]: List of user's stories
+        
+    Raises:
+        HTTPException: 404 if user not found
+        HTTPException: 500 if database error occurs
+    """
+    logger.info(f"Getting stories for user: {user_id}")
+    try:
+        stories = await service.get_user_stories(user_id)
+        logger.info(f"Successfully retrieved {len(stories)} stories for user: {user_id}")
+        return stories
+    except Exception as e:
+        logger.error(f"Error getting stories for user {user_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error",
+            headers={"error_code": "DATABASE_ERROR"}
+        )
 
 @router.delete("/delete-account", tags=["users"], summary="Delete User Account", description="Delete user account and all associated data.")
 async def delete_account(
-    user_id: UUID,
+    user_id: str,
     email: str,
     service: UserService = Depends(get_user_service)
 ):
@@ -180,7 +180,7 @@ async def delete_account(
     Delete user account and all associated data.
     
     Args:
-        user_id: UUID of the user to delete
+        user_id: Firebase UID of the user to delete
         email: Email address to validate ownership
     
     Returns:
@@ -196,21 +196,6 @@ async def delete_account(
         logger.error(f"Error deleting account for {user_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/{user_id}/stories", response_model=List[Dict[str, Any]], tags=["users"], summary="Get User Stories", description="Get all stories for a user.")
-async def get_user_stories(
-    user_id: UUID,
-    service: StoryService = Depends(get_story_service)
-):
-    """Get all stories for a user by user ID."""
-    logger.info(f"Getting stories for user ID: {user_id}")
-    try:
-        stories = await service.get_user_stories(user_id)
-        logger.info(f"Retrieved {len(stories)} stories for user ID: {user_id}")
-        return stories
-    except Exception as e:
-        logger.error(f"Error retrieving stories for user ID {user_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
 class UserUpdateModel(UserCreate):
     """Model for updating a user (all fields optional except user_id)"""
     email: Optional[str] = None
@@ -218,34 +203,36 @@ class UserUpdateModel(UserCreate):
 
 @router.patch("/{user_id}", response_model=UserResponse, tags=["users"], summary="Update User", description="Update a user's information.")
 async def update_user(
-    user_id: UUID,
+    user_id: str,
     user_data: UserUpdateModel = Body(..., example={"email": "new@example.com", "username": "newname"}),
     user_repo: UserRepository = Depends(get_user_repository)
 ):
-    """Update a user's information by user ID."""
-    logger.info(f"Updating user with ID: {user_id}, fields: {user_data.dict(exclude_unset=True)}")
+    """Update a user's information.
+    
+    Args:
+        user_id: Firebase user ID
+        user_data: User data to update
+        user_repo: User repository instance
+        
+    Returns:
+        UserResponse: Updated user details
+    """
+    logger.info(f"Updating user with ID: {user_id}")
     try:
-        update_fields = user_data.dict(exclude_unset=True)
-        if not update_fields:
-            raise HTTPException(status_code=400, detail="No fields provided for update.")
-        if "user_id" in update_fields:
-            logger.warning(f"Attempted to update user_id for user {user_id}")
-            raise HTTPException(status_code=400, detail="Cannot update user_id field")
-        updated_user = await user_repo.update_user(user_id, update_fields)
-        if not updated_user:
-            logger.warning(f"User with ID {user_id} not found for update")
-            raise HTTPException(status_code=404, detail=f"User with ID {user_id} not found")
+        # Filter out None values
+        update_data = {k: v for k, v in user_data.dict().items() if v is not None and k != "user_id"}
+        
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No valid fields to update")
+        
+        result = await user_repo.update_user(user_id, update_data)
+        if not result:
+            raise HTTPException(status_code=404, detail="User not found")
+        
         logger.info(f"User updated successfully: {user_id}")
-        user_response = UserResponse(
-            user_id=updated_user["user_id"],
-            email=updated_user["email"],
-            username=updated_user["username"],
-            created_at=updated_user["created_at"]
-        )
-        # No validation needed for response models since Firebase provides validated data
-        return user_response
+        return UserResponse(**result)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating user with ID {user_id}: {str(e)}", exc_info=True)
+        logger.error(f"Error updating user {user_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
