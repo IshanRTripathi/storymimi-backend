@@ -60,8 +60,6 @@ class StoryGenerator:
             logger.debug(f"[GENERATOR] Generated story metadata: {structured_story_metadata}")
 
             # 3. Update the story in DB with story_metadata (write-once)
-            if not isinstance(user_id, UUID):
-                user_id = UUID(user_id)
             await self.story_client.update_story(story_id, {"story_metadata": structured_story_metadata}, user_id=user_id)
             logger.info(f"[GENERATOR] Story metadata saved for story_id={story_id}")
 
@@ -195,9 +193,7 @@ async def handle_story_error(story_client: StoryRepository, story_id: str, error
         logger.debug(f"[GENERATOR] Generated story metadata: {structured_story_metadata}")
 
         # 3. Update the story in DB with story_metadata (write-once)
-        if not isinstance(user_id, UUID):
-            user_id = UUID(user_id)
-        await story_client.update_story(story_id, {"story_metadata": structured_story_metadata}, user_id=user_id)
+        await self.story_client.update_story(story_id, {"story_metadata": structured_story_metadata}, user_id=user_id)
         logger.info(f"[GENERATOR] Story metadata saved for story_id={story_id}")
 
         # Extract data from structured_story_metadata for further steps
@@ -214,7 +210,7 @@ async def handle_story_error(story_client: StoryRepository, story_id: str, error
         logger.debug(f"[GENERATOR] Updated story data with metadata: {story_data}")
 
         # 4. Update story status to PROCESSING
-        await story_client.update_story_status(story_id, StoryStatus.PROCESSING, user_id=user_id)
+        await self.story_client.update_story_status(story_id, StoryStatus.PROCESSING, user_id=user_id)
         logger.info(f"[GENERATOR] Story status updated to PROCESSING for story_id={story_id}")
 
         # 5. Generate visual profile and base style (once per story)

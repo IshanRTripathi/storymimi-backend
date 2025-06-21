@@ -102,13 +102,13 @@ class StoryRepository(SupabaseBaseClient):
             logger.error(f"Failed to get story in {elapsed:.2f}s: {str(e)}", exc_info=True)
             raise
     
-    async def update_story_status(self, story_id: Union[str, UUID], status: StoryStatus, user_id: Optional[UUID] = None, source: Optional[str] = None) -> bool:
+    async def update_story_status(self, story_id: Union[str, UUID], status: StoryStatus, user_id: Optional[str] = None, source: Optional[str] = None) -> bool:
         """Update the status of a story with audit trail
         
         Args:
             story_id: The ID of the story to update
             status: The new status to set
-            user_id: Optional ID of user performing the update
+            user_id: Optional Firebase UID of user performing the update
             source: Optional string indicating the source of the update (e.g., "user", "system")
             
         Returns:
@@ -123,7 +123,7 @@ class StoryRepository(SupabaseBaseClient):
         update_data = {
             "status": status,
             "updated_at": datetime.now().isoformat(),
-            "updated_by": str(user_id) if user_id else None,
+            "updated_by": user_id,
             "source": source
         }
         
@@ -145,13 +145,13 @@ class StoryRepository(SupabaseBaseClient):
             logger.error(f"Failed to update story status in {elapsed:.2f}s: {str(e)}", exc_info=True)
             return False
     
-    async def update_story(self, story_id: Union[str, UUID], data: Dict[str, Any], user_id: Optional[UUID] = None, source: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    async def update_story(self, story_id: Union[str, UUID], data: Dict[str, Any], user_id: Optional[str] = None, source: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Update a story's information with audit trail
         
         Args:
             story_id: The ID of the story to update
             data: Dictionary containing fields to update
-            user_id: Optional ID of user performing the update
+            user_id: Optional Firebase UID of user performing the update
             source: Optional string indicating the source of the update (e.g., "user", "system")
             
         Returns:
@@ -167,7 +167,7 @@ class StoryRepository(SupabaseBaseClient):
         update_data = {
             **data,
             "updated_at": datetime.now().isoformat(),
-            "updated_by": str(user_id) if user_id else None,
+            "updated_by": user_id,
             "source": source
         }
         
