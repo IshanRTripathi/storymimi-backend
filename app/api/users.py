@@ -142,13 +142,13 @@ async def create_user(
 @router.get("/{user_id}/stories", response_model=List[Dict[str, Any]], tags=["users"], summary="Get User Stories", description="Get all stories for a user.")
 async def get_user_stories(
     user_id: str,
-    service: StoryService = Depends(get_story_service)
+    user_repo: UserRepository = Depends(get_user_repository)
 ):
     """Get all stories for a user.
     
     Args:
         user_id: Firebase user ID
-        service: StoryService instance
+        user_repo: User repository instance
         
     Returns:
         List[Dict[str, Any]]: List of user's stories
@@ -159,9 +159,24 @@ async def get_user_stories(
     """
     logger.info(f"Getting stories for user: {user_id}")
     try:
-        stories = await service.get_user_stories(user_id)
+        # First check if user exists
+        user = await user_repo.get_user(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found",
+                headers={"error_code": "USER_NOT_FOUND"}
+            )
+        
+        # Get stories for the user using the stories table
+        from app.database.supabase_client.stories_client import StoryRepository
+        story_repo = StoryRepository()
+        stories = await story_repo.get_stories_by_user_id(user_id)
+        
         logger.info(f"Successfully retrieved {len(stories)} stories for user: {user_id}")
         return stories
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting stories for user {user_id}: {str(e)}", exc_info=True)
         raise HTTPException(

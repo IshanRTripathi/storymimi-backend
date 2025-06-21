@@ -444,3 +444,33 @@ class StoryRepository(SupabaseBaseClient):
             elapsed = time.time() - start_time
             logger.error(f"Failed to count user stories in {elapsed:.2f}s: {str(e)}", exc_info=True)
             raise
+
+    async def get_stories_by_user_id(self, user_id: Union[str, UUID]) -> List[Dict[str, Any]]:
+        """Get all stories created by a user
+        
+        Args:
+            user_id: The ID of the user
+            
+        Returns:
+            List of story dictionaries
+            
+        Raises:
+            Exception: If retrieval fails
+        """
+        start_time = time.time()
+        user_id_str = str(user_id)
+        
+        self._log_operation("select", "stories", filters={"user_id": user_id_str})
+        logger.info(f"Getting stories for user: {user_id_str}")
+        
+        try:
+            response = self.client.table("stories").select("*").eq("user_id", user_id_str).order("created_at", desc=True).execute()
+            stories = response.data if response.data else []
+            
+            elapsed = time.time() - start_time
+            logger.info(f"Retrieved {len(stories)} stories in {elapsed:.2f}s for user: {user_id_str}")
+            return stories
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"Failed to get user stories in {elapsed:.2f}s: {str(e)}", exc_info=True)
+            raise
