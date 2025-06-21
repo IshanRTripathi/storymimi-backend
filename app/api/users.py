@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Body
+from fastapi import APIRouter, HTTPException, Depends, Body, Query
 from typing import Dict, Any, List, Optional
 from uuid import UUID
 import logging
@@ -184,6 +184,280 @@ async def get_user_stories(
             detail="Internal server error",
             headers={"error_code": "DATABASE_ERROR"}
         )
+
+@router.get("/{user_id}/creations", response_model=Dict[str, Any], tags=["users"], summary="Get User Creations", description="Get user's stories optimized for Flutter My Creations tab with pagination and enhanced metadata.")
+async def get_user_creations(
+    user_id: str,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=50, description="Number of stories per page"),
+    status_filter: Optional[str] = Query(None, description="Filter by story status (pending, processing, completed, failed)"),
+    user_repo: UserRepository = Depends(get_user_repository)
+):
+    """Get user's stories optimized for Flutter My Creations tab.
+    
+    Args:
+        user_id: Firebase user ID
+        page: Page number for pagination
+        limit: Number of stories per page
+        status_filter: Optional status filter
+        user_repo: User repository instance
+        
+    Returns:
+        Dict containing paginated stories with metadata
+        
+    Raises:
+        HTTPException: 404 if user not found
+        HTTPException: 500 if database error occurs
+    """
+    logger.info(f"Getting creations for user: {user_id}, page: {page}, limit: {limit}, status_filter: {status_filter}")
+    try:
+        # First check if user exists
+        user = await user_repo.get_user(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found",
+                headers={"error_code": "USER_NOT_FOUND"}
+            )
+        
+        # Get stories for the user using the stories table
+        from app.database.supabase_client.stories_client import StoryRepository
+        story_repo = StoryRepository()
+        
+        # Get all stories first (we'll implement pagination in the repository later)
+        all_stories = await story_repo.get_stories_by_user_id(user_id)
+        
+        # Apply status filter if provided
+        if status_filter:
+            all_stories = [story for story in all_stories if story.get("status") == status_filter]
+        
+        # Calculate pagination
+        total_stories = len(all_stories)
+        total_pages = (total_stories + limit - 1) // limit
+        start_index = (page - 1) * limit
+        end_index = start_index + limit
+        
+        # Get paginated stories
+        paginated_stories = all_stories[start_index:end_index]
+        
+        # Enhance stories with additional metadata for Flutter
+        enhanced_stories = []
+        for story in paginated_stories:
+            enhanced_story = {
+                "story_id": story["story_id"],
+                "title": story["title"],
+                "status": story["status"],
+                "created_at": story["created_at"],
+                "updated_at": story.get("updated_at"),
+                "cover_image_url": story.get("cover_image_url"),
+                "user_id": story["user_id"],
+                # Add Flutter-specific fields
+                "is_completed": story["status"] == "completed",
+                "is_processing": story["status"] == "processing",
+                "is_failed": story["status"] == "failed",
+                "can_view": story["status"] in ["completed", "failed"],
+                "can_retry": story["status"] == "failed",
+                "estimated_completion_time": story.get("estimated_completion_time"),
+                "progress_percentage": _calculate_progress_percentage(story["status"]),
+                "scene_count": story.get("scene_count", 0),
+                "duration_minutes": story.get("duration_minutes", 0),
+                "tags": story.get("tags", []),
+                "category": story.get("category", "general"),
+                "age_rating": story.get("age_rating", "all"),
+                "difficulty_level": story.get("difficulty_level", "beginner")
+            }
+            enhanced_stories.append(enhanced_story)
+        
+        # Prepare response with pagination metadata
+        response = {
+            "stories": enhanced_stories,
+            "pagination": {
+                "current_page": page,
+                "total_pages": total_pages,
+                "total_stories": total_stories,
+                "stories_per_page": limit,
+                "has_next_page": page < total_pages,
+                "has_previous_page": page > 1
+            },
+            "user_info": {
+                "user_id": user["user_id"],
+                "display_name": user.get("display_name"),
+                "email": user.get("email"),
+                "total_creations": total_stories,
+                "completed_stories": len([s for s in all_stories if s["status"] == "completed"]),
+                "processing_stories": len([s for s in all_stories if s["status"] == "processing"])
+            },
+            "filters": {
+                "applied_status_filter": status_filter,
+                "available_statuses": ["pending", "processing", "completed", "failed"]
+            }
+        }
+        
+        logger.info(f"Successfully retrieved {len(enhanced_stories)} stories for user: {user_id} (page {page}/{total_pages})")
+        return response
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting creations for user {user_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error",
+            headers={"error_code": "DATABASE_ERROR"}
+        )
+
+def _calculate_progress_percentage(status: str) -> int:
+    """Calculate progress percentage based on story status"""
+    status_progress = {
+        "pending": 0,
+        "processing": 50,
+        "completed": 100,
+        "failed": 0
+    }
+    return status_progress.get(status, 0)
+
+@router.get("/{user_id}/creations/stats", response_model=Dict[str, Any], tags=["users"], summary="Get User Creation Statistics", description="Get statistics about user's story creations for My Creations tab.")
+async def get_user_creation_stats(
+    user_id: str,
+    user_repo: UserRepository = Depends(get_user_repository)
+):
+    """Get statistics about user's story creations.
+    
+    Args:
+        user_id: Firebase user ID
+        user_repo: User repository instance
+        
+    Returns:
+        Dict containing user creation statistics
+        
+    Raises:
+        HTTPException: 404 if user not found
+        HTTPException: 500 if database error occurs
+    """
+    logger.info(f"Getting creation statistics for user: {user_id}")
+    try:
+        # First check if user exists
+        user = await user_repo.get_user(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found",
+                headers={"error_code": "USER_NOT_FOUND"}
+            )
+        
+        # Get stories for the user
+        from app.database.supabase_client.stories_client import StoryRepository
+        story_repo = StoryRepository()
+        all_stories = await story_repo.get_stories_by_user_id(user_id)
+        
+        # Calculate statistics
+        total_stories = len(all_stories)
+        completed_stories = len([s for s in all_stories if s["status"] == "completed"])
+        processing_stories = len([s for s in all_stories if s["status"] == "processing"])
+        pending_stories = len([s for s in all_stories if s["status"] == "pending"])
+        failed_stories = len([s for s in all_stories if s["status"] == "failed"])
+        
+        # Calculate success rate
+        success_rate = (completed_stories / total_stories * 100) if total_stories > 0 else 0
+        
+        # Get recent activity (last 30 days)
+        from datetime import datetime, timedelta
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+        recent_stories = [
+            s for s in all_stories 
+            if datetime.fromisoformat(s["created_at"].replace('Z', '+00:00')) > thirty_days_ago
+        ]
+        
+        # Calculate average creation time (for completed stories)
+        completed_story_times = []
+        for story in all_stories:
+            if story["status"] == "completed" and story.get("created_at") and story.get("updated_at"):
+                try:
+                    created = datetime.fromisoformat(story["created_at"].replace('Z', '+00:00'))
+                    updated = datetime.fromisoformat(story["updated_at"].replace('Z', '+00:00'))
+                    creation_time = (updated - created).total_seconds() / 60  # in minutes
+                    completed_story_times.append(creation_time)
+                except:
+                    continue
+        
+        avg_creation_time = sum(completed_story_times) / len(completed_story_times) if completed_story_times else 0
+        
+        # Prepare response
+        stats = {
+            "user_info": {
+                "user_id": user["user_id"],
+                "display_name": user.get("display_name"),
+                "email": user.get("email")
+            },
+            "overview": {
+                "total_creations": total_stories,
+                "completed_stories": completed_stories,
+                "processing_stories": processing_stories,
+                "pending_stories": pending_stories,
+                "failed_stories": failed_stories,
+                "success_rate": round(success_rate, 1)
+            },
+            "activity": {
+                "recent_creations": len(recent_stories),
+                "avg_creation_time_minutes": round(avg_creation_time, 1),
+                "last_creation_date": all_stories[0]["created_at"] if all_stories else None,
+                "most_active_day": _get_most_active_day(all_stories)
+            },
+            "performance": {
+                "completion_rate": round((completed_stories / total_stories * 100), 1) if total_stories > 0 else 0,
+                "failure_rate": round((failed_stories / total_stories * 100), 1) if total_stories > 0 else 0,
+                "avg_stories_per_month": round(total_stories / max(1, _calculate_months_since_first_story(all_stories)), 1)
+            }
+        }
+        
+        logger.info(f"Successfully retrieved creation statistics for user: {user_id}")
+        return stats
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting creation statistics for user {user_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error",
+            headers={"error_code": "DATABASE_ERROR"}
+        )
+
+def _get_most_active_day(stories: List[Dict[str, Any]]) -> Optional[str]:
+    """Get the day when user created the most stories"""
+    if not stories:
+        return None
+    
+    from collections import Counter
+    from datetime import datetime
+    
+    creation_dates = []
+    for story in stories:
+        try:
+            created = datetime.fromisoformat(story["created_at"].replace('Z', '+00:00'))
+            creation_dates.append(created.strftime('%Y-%m-%d'))
+        except:
+            continue
+    
+    if not creation_dates:
+        return None
+    
+    date_counts = Counter(creation_dates)
+    most_active_date = date_counts.most_common(1)[0][0]
+    return most_active_date
+
+def _calculate_months_since_first_story(stories: List[Dict[str, Any]]) -> int:
+    """Calculate months since the first story was created"""
+    if not stories:
+        return 1
+    
+    from datetime import datetime
+    
+    try:
+        first_story_date = datetime.fromisoformat(stories[-1]["created_at"].replace('Z', '+00:00'))
+        current_date = datetime.now()
+        months_diff = (current_date.year - first_story_date.year) * 12 + (current_date.month - first_story_date.month)
+        return max(1, months_diff)
+    except:
+        return 1
 
 @router.delete("/delete-account", tags=["users"], summary="Delete User Account", description="Delete user account and all associated data.")
 async def delete_account(
