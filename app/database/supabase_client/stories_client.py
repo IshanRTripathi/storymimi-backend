@@ -464,7 +464,16 @@ class StoryRepository(SupabaseBaseClient):
         logger.info(f"Getting stories for user: {user_id_str}")
         
         try:
+            # Add debug logging for Supabase client
+            logger.debug(f"Supabase client initialized: {self.client is not None}")
+            logger.debug(f"Querying stories table for user_id: {user_id_str}")
+            
             response = self.client.table("stories").select("*").eq("user_id", user_id_str).order("created_at", desc=True).execute()
+            
+            # Add debug logging for response
+            logger.debug(f"Supabase response received: {response is not None}")
+            logger.debug(f"Response data type: {type(response.data) if hasattr(response, 'data') else 'No data attribute'}")
+            
             stories = response.data if response.data else []
             
             elapsed = time.time() - start_time
@@ -473,4 +482,6 @@ class StoryRepository(SupabaseBaseClient):
         except Exception as e:
             elapsed = time.time() - start_time
             logger.error(f"Failed to get user stories in {elapsed:.2f}s: {str(e)}", exc_info=True)
+            logger.error(f"Error type: {type(e)}")
+            logger.error(f"Error details: {e}")
             raise

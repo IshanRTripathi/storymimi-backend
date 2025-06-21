@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Body, Query
 from typing import Dict, Any, List, Optional
 from uuid import UUID
 import logging
+import time
 
 from app.models.user import User, UserCreate, UserResponse
 from app.services.story_service import StoryService
@@ -154,29 +155,19 @@ async def get_user_stories(
         List[Dict[str, Any]]: List of user's stories
         
     Raises:
-        HTTPException: 404 if user not found
         HTTPException: 500 if database error occurs
     """
     logger.info(f"Getting stories for user: {user_id}")
     try:
-        # First check if user exists
-        user = await user_repo.get_user(user_id)
-        if not user:
-            raise HTTPException(
-                status_code=404,
-                detail="User not found",
-                headers={"error_code": "USER_NOT_FOUND"}
-            )
-        
         # Get stories for the user using the stories table
+        # Note: We don't require the user to exist in the users table first
+        # since stories can be created before user profile is fully set up
         from app.database.supabase_client.stories_client import StoryRepository
         story_repo = StoryRepository()
         stories = await story_repo.get_stories_by_user_id(user_id)
         
         logger.info(f"Successfully retrieved {len(stories)} stories for user: {user_id}")
         return stories
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error getting stories for user {user_id}: {str(e)}", exc_info=True)
         raise HTTPException(
@@ -525,3 +516,29 @@ async def update_user(
     except Exception as e:
         logger.error(f"Error updating user {user_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/test-db", tags=["debug"], summary="Test Database Connection", description="Test endpoint to verify database connection.")
+async def test_database_connection():
+    """Test database connection and basic operations."""
+    logger.info("Testing database connection")
+    try:
+        from app.database.supabase_client.stories_client import StoryRepository
+        story_repo = StoryRepository()
+        
+        # Test a simple query
+        count = await story_repo.count_stories()
+        
+        return {
+            "status": "success",
+            "message": "Database connection successful",
+            "total_stories": count,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"Database connection test failed: {str(e)}", exc_info=True)
+        return {
+            "status": "error",
+            "message": f"Database connection failed: {str(e)}",
+            "error_type": type(e).__name__,
+            "timestamp": time.time()
+        }
