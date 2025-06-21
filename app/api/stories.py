@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, Depends, Query, Body
-from typing import Dict, Any, List
+from fastapi import APIRouter, HTTPException, Depends, Query, Body, BackgroundTasks
+from typing import Dict, Any, List, Optional
 from uuid import UUID
 import logging
 import uuid
@@ -9,9 +9,12 @@ from app.database.supabase_client.stories_client import StoryRepository
 from app.database.supabase_client.scenes_client import SceneRepository
 from app.database.supabase_client.users_client import UserRepository
 from app.database.supabase_client import StorageService
-from app.models.story_types import StoryRequest, StoryResponse, StoryDetail, StoryStatus
+from app.models.story_types import StoryRequest, StoryResponse, StoryDetail, StoryStatus, Scene
 from app.services.story_service import StoryService
+from app.services.ai_service import AIService
+from app.services.elevenlabs_service import ElevenLabsService
 from app.utils.json_converter import JSONConverter
+from app.utils.validator import Validator
 
 # Create a logger for this module
 logger = logging.getLogger(__name__)
@@ -20,13 +23,23 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/stories", tags=["stories"])
 
 # Dependency to get a StoryService instance
-def get_story_service(
+async def get_story_service(
     story_client: StoryRepository = Depends(StoryRepository),
     scene_client: SceneRepository = Depends(SceneRepository),
     user_client: UserRepository = Depends(UserRepository)
 ) -> StoryService:
     """Dependency to get a StoryService instance"""
     return StoryService(story_client, scene_client, user_client)
+
+# Dependency to get an AIService instance
+async def get_ai_service() -> AIService:
+    """Dependency to get an AIService instance"""
+    return AIService()
+
+# Dependency to get an ElevenLabsService instance
+async def get_elevenlabs_service() -> ElevenLabsService:
+    """Dependency to get an ElevenLabsService instance"""
+    return ElevenLabsService()
 
 @router.post("/", response_model=StoryResponse, status_code=202, tags=["stories"], summary="Create Story", description="Create a new story based on the provided prompt.")
 async def create_story(
@@ -209,3 +222,289 @@ async def delete_story(
     except Exception as e:
         logger.error(f"Error deleting story with ID {story_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/conversation-tracking", response_model=Dict[str, Any], tags=["stories"], summary="Track Conversation Completion", description="Track conversation completion and optionally create a story from the conversation data.")
+async def track_conversation_completion(
+    conversation_data: Dict[str, Any] = Body(..., example={
+        "user_id": "xHyXCebE7pdl8xPJ7g5n1jmS5WP2",
+        "conversation_id": "conv_01jy8c468pegdakjm96v30brac",
+        "completed_at": "2025-06-21T10:05:05.417792",
+        "user_type": "authenticated",
+        "platform": "flutter_app",
+        "metrics": {
+            "duration_seconds": 175,
+            "duration_minutes": 2,
+            "total_messages": 21,
+            "user_messages": 10,
+            "agent_messages": 11,
+            "avg_response_time": 8.33,
+            "agent_id": "agent_01jy5rtdqtec3vtc4xtjbqkjrv",
+            "platform": "flutter_elevenlabs",
+            "audio_chunks_processed": 0
+        },
+        "conversation_duration": "0:02:55.487360",
+        "firebase_uid": "xHyXCebE7pdl8xPJ7g5n1jmS5WP2",
+        "user_email": "cursordemo249@gmail.com",
+        "user_display_name": ""
+    }),
+    background_tasks: BackgroundTasks,
+    story_service: StoryService = Depends(get_story_service),
+    ai_service: AIService = Depends(get_ai_service)
+):
+    """Track conversation completion and optionally create a story from the conversation data.
+    
+    Args:
+        conversation_data: Conversation tracking data from Flutter app
+        background_tasks: FastAPI background tasks
+        story_service: StoryService instance
+        ai_service: AIService instance
+        
+    Returns:
+        Dict containing tracking status and optional story creation info
+    """
+    logger.info(f"Tracking conversation completion: {conversation_data.get('conversation_id')}")
+    
+    try:
+        # Extract required fields
+        user_id = conversation_data.get("user_id")
+        conversation_id = conversation_data.get("conversation_id")
+        completed_at = conversation_data.get("completed_at")
+        metrics = conversation_data.get("metrics", {})
+        
+        if not all([user_id, conversation_id, completed_at]):
+            raise HTTPException(
+                status_code=400,
+                detail="Missing required fields: user_id, conversation_id, completed_at"
+            )
+        
+        # Log the conversation tracking data
+        logger.info(f"Conversation tracked successfully: {conversation_id} for user: {user_id}")
+        logger.info(f"Conversation metrics: {metrics}")
+        
+        # Store conversation tracking data (you might want to save this to a database)
+        tracking_result = {
+            "status": "tracked",
+            "conversation_id": conversation_id,
+            "user_id": user_id,
+            "completed_at": completed_at,
+            "metrics": metrics,
+            "message": "Conversation completion tracked successfully"
+        }
+        
+        # Optionally create a story from the conversation
+        # This could be done immediately or in the background
+        if conversation_data.get("create_story", False):
+            # Add background task to create story from conversation
+            background_tasks.add_task(
+                create_story_from_conversation,
+                conversation_data,
+                story_service,
+                ai_service
+            )
+            tracking_result["story_creation"] = "scheduled"
+        
+        return tracking_result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error tracking conversation: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error",
+            headers={"error_code": "TRACKING_ERROR"}
+        )
+
+async def create_story_from_conversation(
+    conversation_data: Dict[str, Any],
+    story_service: StoryService,
+    ai_service: AIService
+):
+    """Create a story from conversation data using AI processing.
+    
+    Args:
+        conversation_data: Conversation tracking data
+        story_service: StoryService instance
+        ai_service: AIService instance
+    """
+    try:
+        user_id = conversation_data.get("user_id")
+        conversation_id = conversation_data.get("conversation_id")
+        metrics = conversation_data.get("metrics", {})
+        
+        logger.info(f"Creating story from conversation: {conversation_id}")
+        
+        # Generate a title and prompt from the conversation data
+        title = f"Conversation Story - {conversation_id[:8]}"
+        
+        # Create a prompt based on conversation metrics
+        prompt = f"""
+        Create a story based on a conversation with the following characteristics:
+        - Duration: {metrics.get('duration_minutes', 0)} minutes
+        - Total messages: {metrics.get('total_messages', 0)}
+        - User messages: {metrics.get('user_messages', 0)}
+        - Agent messages: {metrics.get('agent_messages', 0)}
+        - Average response time: {metrics.get('avg_response_time', 0)} seconds
+        - Agent ID: {metrics.get('agent_id', 'unknown')}
+        
+        Please create an engaging story that captures the essence of this conversation.
+        """
+        
+        # Create story request
+        story_request = StoryRequest(
+            title=title,
+            prompt=prompt,
+            user_id=user_id
+        )
+        
+        # Create the story using the existing story service
+        result = await story_service.create_new_story(story_request)
+        
+        logger.info(f"Story created from conversation {conversation_id}: {result.get('story_id')}")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error creating story from conversation {conversation_id}: {str(e)}", exc_info=True)
+        # Don't raise here as this is a background task
+
+@router.post("/conversation-to-story", response_model=Dict[str, Any], tags=["stories"], summary="Create Story from ElevenLabs Conversation", description="Fetch conversation transcript from ElevenLabs and create a story from the actual conversation content.")
+async def create_story_from_elevenlabs_conversation(
+    conversation_request: Dict[str, Any] = Body(..., example={
+        "conversation_id": "conv_01jy8c468pegdakjm96v30brac",
+        "user_id": "xHyXCebE7pdl8xPJ7g5n1jmS5WP2",
+        "agent_id": "agent_01jy5rtdqtec3vtc4xtjbqkjrv",
+        "fetch_transcript": True,
+        "story_title": "My Conversation Story",
+        "story_prompt": "Create a story based on this conversation"
+    }),
+    background_tasks: BackgroundTasks,
+    story_service: StoryService = Depends(get_story_service),
+    ai_service: AIService = Depends(get_ai_service),
+    elevenlabs_service: ElevenLabsService = Depends(get_elevenlabs_service)
+):
+    """Create a story from ElevenLabs conversation by fetching the transcript.
+    
+    Args:
+        conversation_request: Request containing conversation details
+        background_tasks: FastAPI background tasks
+        story_service: StoryService instance
+        ai_service: AIService instance
+        elevenlabs_service: ElevenLabsService instance
+        
+    Returns:
+        Dict containing story creation status
+    """
+    logger.info(f"Creating story from ElevenLabs conversation: {conversation_request.get('conversation_id')}")
+    
+    try:
+        conversation_id = conversation_request.get("conversation_id")
+        user_id = conversation_request.get("user_id")
+        agent_id = conversation_request.get("agent_id")
+        fetch_transcript = conversation_request.get("fetch_transcript", True)
+        
+        if not all([conversation_id, user_id]):
+            raise HTTPException(
+                status_code=400,
+                detail="Missing required fields: conversation_id, user_id"
+            )
+        
+        # Add background task to fetch transcript and create story
+        background_tasks.add_task(
+            process_elevenlabs_conversation,
+            conversation_request,
+            story_service,
+            ai_service,
+            elevenlabs_service
+        )
+        
+        return {
+            "status": "processing",
+            "conversation_id": conversation_id,
+            "user_id": user_id,
+            "message": "Story creation from conversation transcript has been scheduled",
+            "fetch_transcript": fetch_transcript
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error scheduling story creation from conversation: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error",
+            headers={"error_code": "STORY_CREATION_ERROR"}
+        )
+
+async def process_elevenlabs_conversation(
+    conversation_request: Dict[str, Any],
+    story_service: StoryService,
+    ai_service: AIService,
+    elevenlabs_service: ElevenLabsService
+):
+    """Process ElevenLabs conversation to create a story.
+    
+    Args:
+        conversation_request: Request containing conversation details
+        story_service: StoryService instance
+        ai_service: AIService instance
+        elevenlabs_service: ElevenLabsService instance
+    """
+    try:
+        conversation_id = conversation_request.get("conversation_id")
+        user_id = conversation_request.get("user_id")
+        agent_id = conversation_request.get("agent_id")
+        fetch_transcript = conversation_request.get("fetch_transcript", True)
+        custom_title = conversation_request.get("story_title")
+        custom_prompt = conversation_request.get("story_prompt")
+        
+        logger.info(f"Processing ElevenLabs conversation: {conversation_id}")
+        
+        # Fetch conversation transcript from ElevenLabs
+        transcript = None
+        if fetch_transcript:
+            transcript = await elevenlabs_service.get_conversation_transcript(conversation_id, agent_id)
+            if transcript:
+                logger.info(f"Successfully fetched transcript for conversation: {conversation_id}")
+            else:
+                logger.warning(f"Could not fetch transcript for conversation: {conversation_id}")
+        
+        # Generate title and prompt
+        title = custom_title or f"Conversation Story - {conversation_id[:8]}"
+        
+        if transcript:
+            # Use actual transcript content
+            prompt = f"""
+            Create a story based on the following conversation transcript:
+            
+            {transcript}
+            
+            Please create an engaging story that captures the essence and key moments of this conversation.
+            """
+        else:
+            # Use conversation metadata
+            prompt = custom_prompt or f"""
+            Create a story based on a conversation with ID: {conversation_id}
+            Agent ID: {agent_id}
+            User ID: {user_id}
+            
+            Please create an engaging story that could have emerged from this conversation.
+            """
+        
+        # Create story request
+        story_request = StoryRequest(
+            title=title,
+            prompt=prompt,
+            user_id=user_id
+        )
+        
+        # Create the story using the existing story service
+        result = await story_service.create_new_story(story_request)
+        
+        logger.info(f"Story created from ElevenLabs conversation {conversation_id}: {result.get('story_id')}")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error processing ElevenLabs conversation {conversation_id}: {str(e)}", exc_info=True)
+        # Don't raise here as this is a background task
