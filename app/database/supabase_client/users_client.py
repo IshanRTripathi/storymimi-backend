@@ -174,11 +174,11 @@ class UserRepository(SupabaseBaseClient):
             logger.error(f"Failed to update user in {elapsed:.2f}s: {str(e)}", exc_info=True)
             raise
     
-    async def delete_user(self, user_id: UUID) -> bool:
+    async def delete_user(self, user_id: Union[str, UUID]) -> bool:
         """Delete a user from the database with retry logic
         
         Args:
-            user_id: The ID of the user to delete
+            user_id: The ID of the user to delete (Firebase UID string or UUID)
             
         Returns:
             True if the user was successfully deleted, False otherwise
@@ -187,13 +187,14 @@ class UserRepository(SupabaseBaseClient):
             APIError: If the API returns an error
         """
         try:
-            logger.info(f"Attempting to delete user with ID: {user_id}")
-            result = self.client.table("users").delete().eq("user_id", str(user_id)).execute()
+            user_id_str = str(user_id)
+            logger.info(f"Attempting to delete user with ID: {user_id_str}")
+            result = self.client.table("users").delete().eq("user_id", user_id_str).execute()
             logger.info(f"Delete result: {result}")
             return bool(result.data)
                 
         except Exception as e:
-            logger.error(f"Error deleting user with ID {user_id}: {str(e)}", exc_info=True)
+            logger.error(f"Error deleting user with ID {user_id_str}: {str(e)}", exc_info=True)
             raise APIError(f"Error deleting user: {str(e)}")
 
     async def update_user_cover_image(self, user_id: Union[str, UUID], cover_image_url: str) -> bool:
@@ -230,11 +231,11 @@ class UserRepository(SupabaseBaseClient):
             logger.error(f"Failed to update cover image in {elapsed:.2f}s: {str(e)}", exc_info=True)
             raise
 
-    async def get_user_stories(self, user_id: UUID) -> List[Dict[str, Any]]:
+    async def get_user_stories(self, user_id: Union[str, UUID]) -> List[Dict[str, Any]]:
         """Get all stories associated with a user
         
         Args:
-            user_id: The ID of the user to get stories for
+            user_id: The ID of the user to get stories for (Firebase UID string or UUID)
             
         Returns:
             List of story dictionaries associated with the user
@@ -244,21 +245,22 @@ class UserRepository(SupabaseBaseClient):
             APIError: If there's an error fetching the stories
         """
         try:
-            logger.info(f"Fetching stories for user ID: {user_id}")
-            result = self.client.table("stories").select("*").eq("user_id", str(user_id)).execute()
+            user_id_str = str(user_id)
+            logger.info(f"Fetching stories for user ID: {user_id_str}")
+            result = self.client.table("stories").select("*").eq("user_id", user_id_str).execute()
             
             if not result.data:
-                raise NotFoundError(f"No stories found for user ID: {user_id}")
+                raise NotFoundError(f"No stories found for user ID: {user_id_str}")
             
-            logger.info(f"Found {len(result.data)} stories for user ID: {user_id}")
+            logger.info(f"Found {len(result.data)} stories for user ID: {user_id_str}")
             return result.data
             
         except NotFoundError as e:
-            logger.warning(f"No stories found for user ID {user_id}: {str(e)}")
+            logger.warning(f"No stories found for user ID {user_id_str}: {str(e)}")
             raise
             
         except Exception as e:
-            logger.error(f"Error fetching stories for user ID {user_id}: {str(e)}", exc_info=True)
+            logger.error(f"Error fetching stories for user ID {user_id_str}: {str(e)}", exc_info=True)
             raise APIError(f"Error fetching stories: {str(e)}")
 
     async def get_users(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
