@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     PORT: int = 8080
     
     # Database Configuration
-    SUPABASE_URL: str
-    SUPABASE_KEY: str
+    SUPABASE_URL: str = ""
+    SUPABASE_KEY: str = ""
     
     # Redis Configuration
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -29,22 +29,22 @@ class Settings(BaseSettings):
     LLM_BACKEND: Literal["openrouter", "gemini"] = "gemini"
     
     # OpenRouter Configuration
-    OPENROUTER_API_KEY: str
+    OPENROUTER_API_KEY: str = ""
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     QWEN_MODEL_NAME: str = "qwen/qwen-2.5-7b-instruct:free"
     
     # Google Gemini Configuration
-    GEMINI_API_KEY: str
+    GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.0-flash"
     
     # Together AI Configuration
-    TOGETHER_API_KEY: str
+    TOGETHER_API_KEY: str = ""
     TOGETHER_BASE_URL: str = "https://api.together.xyz"
     TOGETHER_API_URL: str = "https://api.together.xyz/v1/images/generations"
     
     # ElevenLabs Configuration
-    ELEVENLABS_API_KEY: str
-    ELEVENLABS_VOICE_ID: str
+    ELEVENLABS_API_KEY: str = ""
+    ELEVENLABS_VOICE_ID: str = ""
     ELEVENLABS_USE_V3: bool = False
     
     # Image Generation Settings
@@ -78,4 +78,33 @@ def refresh_settings() -> None:
     Useful when environment variables change during runtime.
     """
     global settings
-    settings = Settings() 
+    settings = Settings()
+
+def validate_required_settings() -> bool:
+    """
+    Validate that required settings are configured.
+    Returns True if all required settings are present, False otherwise.
+    """
+    missing_settings = []
+    
+    if not settings.SUPABASE_URL:
+        missing_settings.append("SUPABASE_URL")
+    if not settings.SUPABASE_KEY:
+        missing_settings.append("SUPABASE_KEY")
+    if not settings.OPENROUTER_API_KEY:
+        missing_settings.append("OPENROUTER_API_KEY")
+    if not settings.GEMINI_API_KEY:
+        missing_settings.append("GEMINI_API_KEY")
+    if not settings.TOGETHER_API_KEY:
+        missing_settings.append("TOGETHER_API_KEY")
+    if not settings.ELEVENLABS_API_KEY:
+        missing_settings.append("ELEVENLABS_API_KEY")
+    if not settings.ELEVENLABS_VOICE_ID:
+        missing_settings.append("ELEVENLABS_VOICE_ID")
+    
+    if missing_settings:
+        print(f"Warning: Missing required settings: {', '.join(missing_settings)}")
+        print("These settings are required for full functionality but the app will start with limited features.")
+        return False
+    
+    return True 

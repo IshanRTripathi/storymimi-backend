@@ -221,6 +221,7 @@ async def delete_story(
 
 @router.post("/conversation-tracking", response_model=Dict[str, Any], tags=["stories"], summary="Track Conversation Completion", description="Track conversation completion and optionally create a story from the conversation data.")
 async def track_conversation_completion(
+    background_tasks: BackgroundTasks,
     conversation_data: Dict[str, Any] = Body(..., example={
         "user_id": "xHyXCebE7pdl8xPJ7g5n1jmS5WP2",
         "conversation_id": "conv_01jy8c468pegdakjm96v30brac",
@@ -243,7 +244,6 @@ async def track_conversation_completion(
         "user_email": "cursordemo249@gmail.com",
         "user_display_name": ""
     }),
-    background_tasks: BackgroundTasks,
     story_service: StoryService = Depends(get_story_service),
     ai_service: AIService = Depends(get_ai_service)
 ):
@@ -366,6 +366,7 @@ async def create_story_from_conversation(
 
 @router.post("/conversation-to-story", response_model=Dict[str, Any], tags=["stories"], summary="Create Story from ElevenLabs Conversation", description="Fetch conversation transcript from ElevenLabs and create a story from the actual conversation content.")
 async def create_story_from_elevenlabs_conversation(
+    background_tasks: BackgroundTasks,
     conversation_request: Dict[str, Any] = Body(..., example={
         "conversation_id": "conv_01jy8c468pegdakjm96v30brac",
         "user_id": "xHyXCebE7pdl8xPJ7g5n1jmS5WP2",
@@ -374,7 +375,6 @@ async def create_story_from_elevenlabs_conversation(
         "story_title": "My Conversation Story",
         "story_prompt": "Create a story based on this conversation"
     }),
-    background_tasks: BackgroundTasks,
     story_service: StoryService = Depends(get_story_service),
     ai_service: AIService = Depends(get_ai_service),
     elevenlabs_service: ElevenLabsService = Depends(get_elevenlabs_service)

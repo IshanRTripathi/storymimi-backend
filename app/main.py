@@ -19,8 +19,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 try:
-    from app.core.config.settings import settings
+    from app.core.config.settings import settings, validate_required_settings
     logger.info("Settings imported successfully")
+    
+    # Validate required settings
+    validate_required_settings()
+    
 except Exception as e:
     logger.error(f"Failed to import settings: {str(e)}", exc_info=True)
     raise
