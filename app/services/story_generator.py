@@ -139,26 +139,44 @@ async def complete_story(story_client: StoryRepository, story_data: Dict[str, An
     """Complete story generation and return final response."""
     logger.info(f"[GENERATOR] Completing story for story_id={story_data['story_id']}")
     
-    # Update story status to COMPLETED
+    # Update story status to completed
     await story_client.update_story_status(story_data["story_id"], StoryStatus.COMPLETED)
     
     # Convert scenes to dictionaries before returning
     scene_dicts = []
     for scene in scenes:
-        scene_dict = scene.dict()
-        scene_dict["created_at"] = scene.created_at.isoformat()
-        scene_dict["updated_at"] = scene.updated_at.isoformat()
+        scene_dict = {
+            "scene_id": str(scene.scene_id),
+            "story_id": str(scene.story_id),
+            "sequence": scene.sequence,
+            "title": scene.title,
+            "text": scene.text,
+            "image_prompt": scene.image_prompt,
+            "image_url": scene.image_url,
+            "audio_url": scene.audio_url,
+            "created_at": scene.created_at,
+            "updated_at": scene.updated_at
+        }
         scene_dicts.append(scene_dict)
+    
+    # Ensure story_metadata is always a dictionary
+    story_metadata = story_data.get("story_metadata")
+    if story_metadata is None:
+        story_metadata = {}
+    elif not isinstance(story_metadata, dict):
+        logger.warning(f"[GENERATOR] story_metadata is not a dict, converting to empty dict. Type: {type(story_metadata)}")
+        story_metadata = {}
     
     return {
         "story_id": story_data["story_id"],
         "title": story_data["title"],
-        "prompt": story_data["prompt"],
-        "status": story_data["status"],
+        "status": StoryStatus.COMPLETED,
+        "scenes": scene_dicts,
+        "user_id": story_data["user_id"],
+        "cover_image_url": story_data.get("cover_image_url"),
         "created_at": story_data["created_at"],
         "updated_at": story_data["updated_at"],
-        "story_metadata": story_data.get("story_metadata", {}),
-        "scenes": scene_dicts
+        "story_metadata": story_metadata
     }
 
 async def handle_story_error(story_client: StoryRepository, story_id: str, error: Exception) -> Dict[str, Any]:
@@ -168,13 +186,25 @@ async def handle_story_error(story_client: StoryRepository, story_id: str, error
     # Get the actual story data from the database
     story_data = await story_client.get_story(story_id)
     
+    # Ensure story_metadata is always a dictionary
+    story_metadata = story_data.get("story_metadata")
+    if story_metadata is None:
+        story_metadata = {}
+    elif not isinstance(story_metadata, dict):
+        logger.warning(f"[GENERATOR] story_metadata is not a dict in error handler, converting to empty dict. Type: {type(story_metadata)}")
+        story_metadata = {}
+    
     return {
         "story_id": story_data["story_id"],
         "title": story_data["title"],
         "status": StoryStatus.FAILED,
-        "error": str(error),
-        "created_at": story_data["created_at"],
-        "updated_at": datetime.utcnow().isoformat()
+        "scenes": [],
+        "user_id": story_data["user_id"],
+        "cover_image_url": story_data.get("cover_image_url"),
+        "created_at": story_data.get("created_at"),
+        "updated_at": story_data.get("updated_at"),
+        "story_metadata": story_metadata,
+        "error": str(error)
     }
 
     try:
@@ -334,6 +364,14 @@ async def complete_story(story_client: StoryRepository, story_data: Dict[str, An
         }
         scene_dicts.append(scene_dict)
     
+    # Ensure story_metadata is always a dictionary
+    story_metadata = story_data.get("story_metadata")
+    if story_metadata is None:
+        story_metadata = {}
+    elif not isinstance(story_metadata, dict):
+        logger.warning(f"[GENERATOR] story_metadata is not a dict, converting to empty dict. Type: {type(story_metadata)}")
+        story_metadata = {}
+    
     return {
         "story_id": story_data["story_id"],
         "title": story_data["title"],
@@ -343,7 +381,7 @@ async def complete_story(story_client: StoryRepository, story_data: Dict[str, An
         "cover_image_url": story_data.get("cover_image_url"),
         "created_at": story_data["created_at"],
         "updated_at": story_data["updated_at"],
-        "story_metadata": story_data.get("story_metadata", {})  # Include story_metadata from story_data
+        "story_metadata": story_metadata
     }
 
 async def handle_story_error(story_client: StoryRepository, story_id: str, error: Exception) -> Dict[str, Any]:
@@ -352,6 +390,14 @@ async def handle_story_error(story_client: StoryRepository, story_id: str, error
     
     # Get the actual story data from the database
     story_data = await story_client.get_story(story_id)
+    
+    # Ensure story_metadata is always a dictionary
+    story_metadata = story_data.get("story_metadata")
+    if story_metadata is None:
+        story_metadata = {}
+    elif not isinstance(story_metadata, dict):
+        logger.warning(f"[GENERATOR] story_metadata is not a dict in error handler, converting to empty dict. Type: {type(story_metadata)}")
+        story_metadata = {}
     
     return {
         "story_id": story_data["story_id"],
@@ -362,6 +408,6 @@ async def handle_story_error(story_client: StoryRepository, story_id: str, error
         "cover_image_url": story_data.get("cover_image_url"),
         "created_at": story_data.get("created_at"),
         "updated_at": story_data.get("updated_at"),
-        "story_metadata": story_data.get("story_metadata", {}),  # Include story_metadata
+        "story_metadata": story_metadata,
         "error": str(error)
     }

@@ -145,8 +145,13 @@ class Validator:
         
         # Validate story_metadata if present and not initial creation
         if not is_initial_creation and "story_metadata" in data:
-            if not isinstance(data["story_metadata"], dict):
-                raise ValueError("Story metadata must be a dictionary.")
+            story_metadata = data["story_metadata"]
+            if story_metadata is None:
+                logger.warning("[VALIDATOR] story_metadata is None, converting to empty dict")
+                data["story_metadata"] = {}
+            elif not isinstance(story_metadata, dict):
+                logger.error(f"[VALIDATOR] story_metadata is not a dict. Type: {type(story_metadata)}, Value: {story_metadata}")
+                raise ValueError(f"Story metadata must be a dictionary, got {type(story_metadata)}")
         
         # Validate scenes if present
         if "scenes" in data:
