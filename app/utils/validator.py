@@ -1,5 +1,4 @@
 from typing import Dict, Any, List, Optional
-from uuid import UUID
 from datetime import datetime
 from app.models.story_types import Scene, StoryStatus
 import logging
@@ -32,19 +31,53 @@ class Validator:
             raise ValueError("Scenes must be a list")
             
     @staticmethod
-    def validate_model_data(data: Dict[str, Any], is_initial_creation: bool = False, is_completion: bool = False) -> None:
-        """Validate database model data
+    def validate_email(email: str, is_firebase_auth: bool = True) -> None:
+        """Validate email format - simplified for Firebase auth users
+        
+        Args:
+            email: Email address to validate
+            is_firebase_auth: If True, use minimal validation (Firebase already validates)
+            
+        Raises:
+            ValueError: If email format is invalid
+        """
+        if not email:
+            raise ValueError("Email cannot be empty")
+            
+        # For Firebase auth users, minimal validation since Firebase already validates
+        if is_firebase_auth:
+            # Firebase ensures valid email format, just check it's not empty
+            if not email.strip():
+                raise ValueError("Email cannot be empty")
+            return
+            
+    @staticmethod
+    def validate_model_data(data: Dict[str, Any], is_initial_creation: bool = False, is_completion: bool = False, is_response: bool = False) -> None:
+        """Validate database model data - simplified for Firebase auth
         
         Args:
             data: Dictionary containing model data
             is_initial_creation: If True, allows partial data for story creation
             is_completion: If True, allows completion-specific validation
+            is_response: If True, allows response-specific validation
             
         Raises:
             ValueError: If validation fails
         """
         logger.info(f"[VALIDATOR] Starting model data validation. is_initial_creation={is_initial_creation}, is_completion={is_completion}")
         logger.debug(f"[VALIDATOR] Data to validate: {data}")
+        
+        # Skip validation for response models
+        if is_response:
+            return
+        
+        # Validate email if present - minimal validation for Firebase users
+        if "email" in data:
+            try:
+                Validator.validate_email(data["email"], is_firebase_auth=True)
+            except ValueError as e:
+                logger.error(f"[VALIDATOR] Email validation failed: {str(e)}")
+                raise ValueError(f"Invalid email: {str(e)}")
         
         # For initial story creation, only require basic fields
         required_fields = ["story_id", "title", "status"]
@@ -54,12 +87,7 @@ class Validator:
             if data.get("status") != "failed":
                 required_fields.extend(["scenes"])
             
-            # Add story_metadata to required fields for non-initial creation if it's expected
-            # Based on the user's input, it's created once and then referred by other flows.
-            # So, if not initial creation, it should be present.
             required_fields.extend(["story_metadata"])
-            
-            # Always require timestamps for non-initial creation
             required_fields.extend(["created_at", "updated_at"])
             
             # Only require user_id if it's not a failed status
@@ -81,25 +109,20 @@ class Validator:
             
         logger.info("[VALIDATOR] All required fields present, proceeding with type validation")
         
-        # Validate field types
-        if not isinstance(data["story_id"], (str, UUID)):
-            raise ValueError("Story ID must be a string or UUID")
+        # Basic type validation
+        if "story_id" in data and not isinstance(data["story_id"], str):
+            raise ValueError("Story ID must be a string")
             
-        if not isinstance(data["user_id"], (str, UUID)):
-            raise ValueError("User ID must be a string or UUID")
+        # Simplified user_id validation - Firebase UIDs are already validated
+        if "user_id" in data and not isinstance(data["user_id"], str):
+            raise ValueError("User ID must be a string")
             
         # Validate timestamps
         if not is_initial_creation:
             if "created_at" not in data or "updated_at" not in data:
                 raise ValueError("Timestamps are required for non-initial creation")
             
-            # Check if timestamps are datetime objects
-            if not isinstance(data["created_at"], (str, datetime)):
-                raise ValueError("created_at must be a string or datetime")
-            if not isinstance(data["updated_at"], (str, datetime)):
-                raise ValueError("updated_at must be a string or datetime")
-            
-            # Validate timestamps can be converted to ISO format
+            # Convert timestamps to ISO format if needed
             try:
                 if isinstance(data["created_at"], datetime):
                     data["created_at"] = data["created_at"].isoformat()
@@ -107,17 +130,6 @@ class Validator:
                     data["updated_at"] = data["updated_at"].isoformat()
             except Exception as e:
                 raise ValueError(f"Failed to convert timestamp to ISO format: {str(e)}")
-                
-            # Validate timestamps are valid ISO format strings
-            try:
-                datetime.fromisoformat(data["created_at"])
-                datetime.fromisoformat(data["updated_at"])
-            except ValueError:
-                raise ValueError("Timestamps must be valid ISO format strings")
-                
-            # Validate created_at is not after updated_at
-            if data["created_at"] > data["updated_at"]:
-                raise ValueError("created_at cannot be after updated_at")
         
         # Validate status
         if "status" in data:
@@ -128,51 +140,42 @@ class Validator:
                 raise ValueError(f"Invalid status value: {data['status']}. Valid statuses are: {', '.join(valid_statuses)}")
         
         # Validate title
-        if not isinstance(data["title"], str) or not data["title"].strip():
+        if "title" in data and (not isinstance(data["title"], str) or not data["title"].strip()):
             raise ValueError("Title must be a non-empty string")
         
         # Validate story_metadata if present and not initial creation
         if not is_initial_creation and "story_metadata" in data:
             if not isinstance(data["story_metadata"], dict):
                 raise ValueError("Story metadata must be a dictionary.")
-            # Further detailed validation of story_metadata can be added here if its internal structure is strictly defined.
-            # For now, we'll assume the LLM output is mostly trusted or validated at the prompt service level.
         
         # Validate scenes if present
         if "scenes" in data:
             scenes = data["scenes"]
             if not isinstance(scenes, list):
                 raise ValueError("Scenes must be a list")
-            logger.info(f"[VALIDATOR] Validating {len(scenes)} scenes - {scenes}")    
+            logger.info(f"[VALIDATOR] Validating {len(scenes)} scenes")    
             for scene in scenes:
                 # Check if scene is already a Scene model instance
                 if isinstance(scene, Scene):
                     scene_dict = scene.dict()
                 else:
-                    # If not, ensure it's a dictionary
                     if not isinstance(scene, dict):
                         raise ValueError("Each scene must be a dictionary")
                     scene_dict = scene
-                # Validate required scene fields
-                required_scene_fields = ["scene_id", "story_id", "sequence", "title", "text", "image_prompt", "image_url", "audio_url", "created_at", "updated_at"]
+                
+                # Basic scene validation
+                required_scene_fields = ["scene_id", "story_id", "sequence", "title", "text"]
                 missing_scene_fields = [field for field in required_scene_fields if field not in scene_dict]
                 if missing_scene_fields:
                     raise ValueError(f"Scene is missing required fields: {', '.join(missing_scene_fields)}")
-                # Validate field types
+                
+                # Basic type validation
                 if not isinstance(scene_dict["text"], str) or not scene_dict["text"].strip():
                     raise ValueError("Scene text must be a non-empty string")
                 if not isinstance(scene_dict["title"], str) or not scene_dict["title"].strip():
                     raise ValueError("Scene title must be a non-empty string")
-                if not isinstance(scene_dict["image_prompt"], str) or not scene_dict["image_prompt"].strip():
-                    raise ValueError("Scene image_prompt must be a non-empty string")
                 if not isinstance(scene_dict["sequence"], int):
                     raise ValueError("Scene sequence must be an integer")
-                # image_url and audio_url can be None or str
-                if scene_dict["image_url"] is not None and not isinstance(scene_dict["image_url"], str):
-                    raise ValueError("Scene image_url must be a string or None")
-                if scene_dict["audio_url"] is not None and not isinstance(scene_dict["audio_url"], str):
-                    raise ValueError("Scene audio_url must be a string or None")
-                
 
     @staticmethod
     def validate_scene(scene: Dict[str, Any]) -> None:

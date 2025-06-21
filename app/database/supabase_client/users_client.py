@@ -25,6 +25,7 @@ import uuid
 
 from app.database.supabase_client.base_client import SupabaseBaseClient
 from app.models.user import User, UserResponse
+from app.utils.validator import Validator
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +37,18 @@ class UserRepository(SupabaseBaseClient):
         super().__init__()
         logger.info("UserRepository initialized successfully")
     
-    async def create_user(self, email: str, username: str) -> Dict[str, Any]:
+    async def create_user(self, email: str, display_name: Optional[str], user_id: str, firebase_uid: str, profile_source: str, is_active: bool, created_at: datetime, metadata: Optional[dict] = None) -> Dict[str, Any]:
         """Create a new user in the database with retry logic
         
         Args:
             email: The user's email address
-            username: The user's username
+            display_name: The user's display name (optional)
+            user_id: The Firebase user ID
+            firebase_uid: The Firebase UID
+            profile_source: Source of the profile (firebase_auth/manual/other)
+            is_active: User's active status
+            created_at: User creation timestamp
+            metadata: Custom metadata (optional)
             
         Returns:
             The created user data or None if creation failed
@@ -53,15 +60,19 @@ class UserRepository(SupabaseBaseClient):
             Exception: For other failures
         """
         start_time = time.time()
-        user_id = str(uuid.uuid4())
         user_data = {
-            "email": email,
-            "username": username,
-            "user_id": user_id
+            "email": email.lower(),  # Normalize email to lowercase
+            "display_name": display_name,
+            "user_id": user_id,
+            "firebase_uid": firebase_uid,
+            "profile_source": profile_source,
+            "is_active": is_active,
+            "created_at": created_at.isoformat(),
+            "metadata": metadata or {}
         }
         
         self._log_operation("insert", "users", user_data)
-        logger.info(f"Creating new user with email: {email}, username: {username}, user_id: {user_id}")
+        logger.info(f"Creating new user with email: {email}, display_name: {display_name}, user_id: {user_id}")
         
         max_retries = 3
         retry_delay = 1  # Start with 1 second delay
@@ -71,11 +82,11 @@ class UserRepository(SupabaseBaseClient):
                 response = self.client.table("users").insert(user_data).execute()
                 
                 if not response.data:
-                    logger.error(f"Failed to create user: No data returned from database")
+                    logger.error(f"Failed to create user with email {email}: No data returned from database")
                     return None
                     
                 elapsed = time.time() - start_time
-                logger.info(f"User created successfully in {elapsed:.2f}s: {user_id}")
+                logger.info(f"User created successfully in {elapsed:.2f}s: user_id={user_id}, email={email}")
                 return response.data[0]
                 
             except ConflictError as e:

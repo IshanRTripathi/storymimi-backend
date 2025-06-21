@@ -3,7 +3,7 @@ from typing import Dict, Any, List, Optional
 from uuid import UUID
 import logging
 
-from app.models.user import User, UserCreate, UserResponse, UserStoriesResponse
+from app.models.user import User, UserCreate, UserResponse
 from app.services.story_service import StoryService
 from app.services.user_service import UserService
 from app.database.supabase_client import StorageService
@@ -39,30 +39,107 @@ async def get_story_service(
     """Dependency to get a StoryService instance"""
     return StoryService(story_client, scene_client, user_client)
 
-@router.post("/", response_model=UserResponse, status_code=201, tags=["users"], summary="Create User", description="Create a new user.")
-async def create_user(
-    user: UserCreate = Body(..., example={"email": "user@example.com", "username": "user123"}),
+@router.get("/{user_id}", response_model=UserResponse, tags=["users"], summary="Get User", description="Check if a user exists by their Firebase UID.")
+async def get_user(
+    user_id: str,
     user_repo: UserRepository = Depends(get_user_repository)
 ):
-    """Create a new user and return user details."""
-    logger.info(f"Creating new user with username: {user.username}, email: {user.email}")
+    """Get user details by their Firebase UID.
+    
+    Args:
+        user_id: Firebase user ID
+        user_repo: User repository instance
+        
+    Returns:
+        UserResponse: User details if found
+        
+    Raises:
+        HTTPException: 404 if user not found
+        HTTPException: 500 if database error occurs
+    """
+    logger.info(f"Checking if user exists with Firebase UID: {user_id}")
     try:
-        result = await user_repo.create_user(user.email, user.username)
+        user = await user_repo.get_user(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found",
+                headers={"error_code": "USER_NOT_FOUND"}
+            )
+        
+        logger.info(f"User found with Firebase UID: {user_id}")
+        return UserResponse(**user)
+    except Exception as e:
+        logger.error(f"Error checking user {user_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error",
+            headers={"error_code": "DATABASE_ERROR"}
+        )
+
+
+@router.post("/", response_model=UserResponse, status_code=201, tags=["users"], summary="Create User", description="Create a new user using Firebase auth data.")
+async def create_user(
+    user: UserCreate = Body(..., example={"user_id": "xHyXCebE7pdl8xPJ7g5n1jmS5WP2", "email": "cursordemo249@gmail.com", "display_name": "", "created_at": "2025-06-21T08:00:29.129451", "firebase_uid": "xHyXCebE7pdl8xPJ7g5n1jmS5WP2", "profile_source": "firebase_auth", "is_active": True, "metadata": {"additional_info": "any custom data"}}),
+    user_repo: UserRepository = Depends(get_user_repository)
+):
+    """Create a new user using Firebase auth data.
+    
+    Args:
+        user (UserCreate): User data from Firebase auth
+        user_repo: User repository instance
+        
+    Returns:
+        UserResponse: Created user details
+    """
+    logger.info(f"Creating user with Firebase UID: {user.firebase_uid}, email: {user.email}")
+    try:
+        # Set default display name if empty
+        display_name = user.display_name or user.email.split('@')[0]
+        
+        # Create user with provided Firebase data
+        result = await user_repo.create_user(
+            email=user.email,
+            display_name=display_name,
+            user_id=user.user_id,
+            firebase_uid=user.firebase_uid,
+            profile_source=user.profile_source,
+            is_active=user.is_active,
+            created_at=user.created_at,
+            metadata=user.metadata
+        )
         if not result:
             logger.error("Failed to create user: No result returned from database")
-            raise HTTPException(status_code=500, detail="Failed to create user")
-        logger.info(f"User created successfully with ID: {result['user_id']}")
+            raise HTTPException(
+                status_code=500,
+                detail="Internal server error",
+                headers={"error_code": "DATABASE_ERROR"}
+            )
+        
+        logger.info(f"User created successfully with Firebase UID: {user.firebase_uid}")
         user_response = UserResponse(
             user_id=result["user_id"],
             email=result["email"],
-            username=result["username"],
-            created_at=result["created_at"]
+            display_name=result["display_name"],
+            created_at=result["created_at"],
+            firebase_uid=result["firebase_uid"],
+            profile_source=result["profile_source"],
+            is_active=result["is_active"],
+            updated_at=result["updated_at"],
+            cover_image_url=result.get("cover_image_url"),
+            metadata=result.get("metadata")
         )
-        Validator.validate_model_data(user_response.dict(), is_response=True)
+        # No validation needed for response models since Firebase provides validated data
         return user_response
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error creating user: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error creating user with Firebase data: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error",
+            headers={"error_code": "DATABASE_ERROR"}
+        )
 
 @router.get("/{user_id}", response_model=UserResponse, tags=["users"], summary="Get User", description="Get a user by ID.")
 async def get_user(
@@ -165,7 +242,7 @@ async def update_user(
             username=updated_user["username"],
             created_at=updated_user["created_at"]
         )
-        Validator.validate_model_data(user_response.dict(), is_response=True)
+        # No validation needed for response models since Firebase provides validated data
         return user_response
     except HTTPException:
         raise

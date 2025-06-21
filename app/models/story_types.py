@@ -1,8 +1,8 @@
 from typing import Optional, List, Dict, Any
-from uuid import UUID
 from datetime import datetime
 from enum import Enum
-
+import re
+from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 from app.utils.prompt_limits import get_component_limit
 
@@ -55,7 +55,14 @@ class StoryRequest(BaseModel):
     """Request model for creating a story"""
     title: str = Field(info={"description": "Title for the story"})
     prompt: str = Field(info={"description": "Prompt for story generation"})
-    user_id: UUID = Field(info={"description": "User ID"})
+    user_id: str = Field(info={"description": "Firebase user ID"})
+
+    @field_validator('user_id')
+    def validate_user_id(cls, v):
+        """Validate Firebase UID format"""
+        if not re.match(r'^[a-zA-Z0-9-]{28}$', v):
+            raise ValueError("Invalid Firebase UID format. Must be 28 characters long and contain only letters, numbers, and hyphens")
+        return v
 
 
 class StoryResponse(BaseModel):
@@ -64,10 +71,17 @@ class StoryResponse(BaseModel):
     title: str = Field(info={"description": "Title of the story"})
     error: Optional[str] = Field(default=None, info={"description": "Error message if present"})
     story_id: Optional[UUID] = Field(default=None, info={"description": "Story ID"})
-    user_id: UUID = Field(info={"description": "User ID"})
+    user_id: str = Field(info={"description": "Firebase user ID"})
     cover_image_url: Optional[str] = Field(default=None, info={"description": "URL of the story cover image"})
     created_at: Optional[datetime] = Field(default=None, info={"description": "Creation timestamp"})
     updated_at: Optional[datetime] = Field(default=None, info={"description": "Last update timestamp"})
+
+    @field_validator('user_id')
+    def validate_user_id(cls, v):
+        """Validate Firebase UID format"""
+        if not re.match(r'^[a-zA-Z0-9-]{28}$', v):
+            raise ValueError("Invalid Firebase UID format. Must be 28 characters long and contain only letters, numbers, and hyphens")
+        return v
 
 
 class StoryData(BaseModel):
@@ -82,11 +96,18 @@ class StoryDetail(BaseModel):
     title: str = Field(info={"description": "Title of the story"})
     status: StoryStatus = Field(info={"description": "Current status of the story"})
     scenes: List[Scene] = Field(info={"description": "List of story scenes"})
-    user_id: UUID = Field(info={"description": "User ID"})
+    user_id: str = Field(info={"description": "Firebase user ID"})
     cover_image_url: Optional[str] = Field(default=None, info={"description": "URL of the story cover image"})
     created_at: datetime = Field(info={"description": "Creation timestamp"})
     updated_at: datetime = Field(info={"description": "Last update timestamp"})
     story_metadata: Optional[Dict[str, Any]] = Field(default=None, info={"description": "LLM-generated structured story metadata"}, exclude=True)
+
+    @field_validator('user_id')
+    def validate_user_id(cls, v):
+        """Validate Firebase UID format"""
+        if not re.match(r'^[a-zA-Z0-9-]{28}$', v):
+            raise ValueError("Invalid Firebase UID format. Must be 28 characters long and contain only letters, numbers, and hyphens")
+        return v
 
 
 class SceneImagePrompt(BaseModel):
